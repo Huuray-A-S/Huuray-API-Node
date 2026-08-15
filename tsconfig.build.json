@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // The tarball ships dist/ without src/, so maps must carry their own
+    // sources; declaration maps can't (they only point at paths) and are
+    // dropped rather than shipped broken.
+    "inlineSources": true,
+    "declarationMap": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["test", "examples"]
+}

@@ -1,0 +1,75 @@
+{
+  "name": "huuray",
+  "version": "0.1.0",
+  "description": "Official Node.js and TypeScript client for the Huuray API v4 — send digital gift cards and rewards to recipients in 170+ countries.",
+  "keywords": [
+    "huuray",
+    "gift-card",
+    "giftcard",
+    "gift-cards",
+    "rewards",
+    "incentives",
+    "digital-rewards",
+    "vouchers",
+    "employee-rewards",
+    "api-client",
+    "sdk",
+    "typescript"
+  ],
+  "homepage": "https://github.com/huuray/huuray-node#readme",
+  "bugs": {
+    "url": "https://github.com/huuray/huuray-node/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huuray/huuray-node.git"
+  },
+  "license": "MIT",
+  "author": "Huuray A/S (https://huuray.com)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "huuray": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "openapi/huuray-v4.json",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "codegen": "node scripts/codegen.mjs",
+    "build": "npm run codegen && tsc -p tsconfig.build.json",
+    "typecheck": "npm run codegen && tsc --noEmit",
+    "test": "npm run codegen && vitest run",
+    "test:watch": "vitest",
+    "spec:fetch": "node scripts/fetch-spec.mjs",
+    "prepack": "npm run build",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "openapi-typescript": "^7.4.4",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "sideEffects": false
+}

@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22', '24']
+        os: [ubuntu-latest]
+        include:
+          - node: '22'
+            os: windows-latest
+          - node: '22'
+            os: macos-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Generate types from the vendored spec
+        run: npm run codegen
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npx vitest run
+
+      - name: Build
+        run: npx tsc -p tsconfig.build.json
+
+  generated-types-are-reproducible:
+    name: Generated types match the spec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      # src/types.gen.ts is gitignored, so this asserts codegen is deterministic
+      # and that the committed spec produces types the build actually compiles.
+      - name: Codegen twice and compare
+        run: |
+          npm run codegen
+          cp src/types.gen.ts /tmp/first.ts
+          npm run codegen
+          diff -u /tmp/first.ts src/types.gen.ts
