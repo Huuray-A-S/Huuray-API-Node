@@ -30,6 +30,30 @@ describe('construction', () => {
     expect(calls[0]?.path).toBe('/v4/Balance');
   });
 
+  it.each([
+    // '/v4' is the case that differs by platform in other languages: not
+    // absolute on Windows, a valid file:// URI on Linux and macOS. Validating
+    // the scheme makes the behaviour identical everywhere.
+    '/v4',
+    'v4',
+    'api.huuray.com',
+    'file:///etc/passwd',
+    'ftp://example.test',
+  ])('rejects a base URL that is not absolute http(s): %s', (bad) => {
+    expect(() => new HuurayClient({ apiToken: 't', apiSecret: 's', baseUrl: bad })).toThrow(
+      HuurayConfigError,
+    );
+  });
+
+  it.each(['https://api.huuray.com', 'http://localhost:8080'])(
+    'accepts an absolute http(s) base URL: %s',
+    (good) => {
+      expect(
+        () => new HuurayClient({ apiToken: 't', apiSecret: 's', baseUrl: good }),
+      ).not.toThrow();
+    },
+  );
+
   it('accepts a base URL with a trailing slash', async () => {
     const { client, calls } = testClient(undefined, { baseUrl: 'https://example.test/' });
     await client.balances.list();

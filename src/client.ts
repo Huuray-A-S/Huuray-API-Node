@@ -109,6 +109,26 @@ export class HuurayClient {
     this.#apiToken = options.apiToken;
     this.#apiSecret = options.apiSecret;
     this.#baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+
+    // Fail here, not at the first request. A baseUrl of '/v4' or 'api.huuray.com'
+    // (no scheme) would otherwise be accepted and only surface later as a
+    // confusing transport error — and requiring http(s) keeps credentials from
+    // being aimed at a file:// or ftp:// target by a configuration typo.
+    let parsedBaseUrl: URL;
+    try {
+      parsedBaseUrl = new URL(this.#baseUrl);
+    } catch {
+      throw new HuurayConfigError(
+        `baseUrl ${JSON.stringify(options.baseUrl)} is not an absolute http(s) URL. ` +
+          `Expected something like ${JSON.stringify(DEFAULT_BASE_URL)}.`,
+      );
+    }
+    if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
+      throw new HuurayConfigError(
+        `baseUrl ${JSON.stringify(options.baseUrl)} must use http or https, not ` +
+          `${JSON.stringify(parsedBaseUrl.protocol)}.`,
+      );
+    }
     this.#hashEncoding = options.hashEncoding;
     this.#timeoutMs = options.timeoutMs ?? 30_000;
 
