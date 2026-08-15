@@ -1,4 +1,3 @@
-
 # huuray
 
 #### Easily send gift cards and rewards from Node.js
@@ -14,8 +13,6 @@
 [Huuray](https://huuray.com) is a platform for sending digital gift cards and rewards to recipients in 170+ countries. `huuray` is the official, slightly-opinionated Node.js and TypeScript client for the **Huuray API v4** — with, dare we say, *hurray*-worthy defaults for the parts of a rewards API that are easy to get wrong.
 
 Use it to send employee recognition, customer incentives, survey payouts, referral bonuses, or research participant compensation — without anyone opening a dashboard.
-
-<br clear="right"/>
 
 ```ts
 import { HuurayClient } from 'huuray';
@@ -39,8 +36,6 @@ await huuray.sendReward({
 - **Request signing handled** — the nonce and SHA-512 hash every call needs.
 - **Safe by default around money** — orders are never automatically retried, because the API has no idempotency key.
 - **Zero runtime dependencies.**
-
----
 
 ## Requirements
 
@@ -116,8 +111,6 @@ await huuray.orders.create({
   recipients:   [ /* 1 recipient, or exactly 200 */ ],
 });
 ```
-
----
 
 ## Seven things worth knowing
 
@@ -238,8 +231,6 @@ new HuurayClient({ apiToken, apiSecret, hashEncoding: 'base64' });
 // 'hex' (default) | 'hex-upper' | 'base64' | 'base64url'
 ```
 
----
-
 ## API coverage
 
 All nine v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
@@ -342,8 +333,6 @@ For the API itself, your account, or a live production problem, contact your Huu
 ## Code of Conduct
 
 Please note that this project is released with a [Contributor Code of Conduct](.github/CODE_OF_CONDUCT.md). By contributing to this project, you agree to abide by its terms.
-
----
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/ronniegasseholm-prog/huuray-node/main/.github/assets/huuray-logo.svg" width="96" alt="Huuray"/><br/>
