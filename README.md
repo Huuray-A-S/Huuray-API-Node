@@ -9,6 +9,7 @@
 [![npm](https://img.shields.io/npm/v/huuray.svg?color=45652a)](https://www.npmjs.com/package/huuray)
 [![License: MIT](https://img.shields.io/badge/license-MIT-45652a.svg)](LICENSE)
 [![API v4](https://img.shields.io/badge/Huuray%20API-v4-9dcf73.svg)](https://api.huuray.com/swagger/index.html)
+[![Sign up](https://img.shields.io/badge/Huuray-sign%20up-ff5c43.svg)](https://huuray.com/sign-up/)
 <!-- badges: end -->
 
 [Huuray](https://huuray.com) is a platform for sending digital gift cards and rewards to recipients in 170+ countries. `huuray` is the official, slightly-opinionated Node.js and TypeScript client for the **Huuray API v4** — with, dare we say, *hurray*-worthy defaults for the parts of a rewards API that are easy to get wrong.
@@ -44,7 +45,11 @@ await huuray.sendReward({
 
 ## Requirements
 
-Node 20 or newer, and API credentials from Huuray. Ask your Huuray contact for an API token and secret if you do not have them.
+- **Node 20 or newer.**
+- **A Huuray B2B account.** New to Huuray? [Sign up here](https://huuray.com/sign-up/) — it takes a couple of minutes.
+- **API credentials** — an API token and secret for your account. Ask your Huuray contact to enable API access if you do not have them yet.
+
+The full API this client wraps is documented at the [Huuray API v4 reference (Swagger)](https://api.huuray.com/swagger/index.html).
 
 ## Install
 
@@ -238,7 +243,7 @@ new HuurayClient({ apiToken, apiSecret, hashEncoding: 'base64' });
 
 ## API coverage
 
-All nine v4 operations, and nothing else:
+All nine v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
 
 | Method | Endpoint |
 |---|---|
@@ -317,13 +322,15 @@ npx huuray --help
 
 ## Links
 
-- [Huuray API reference](https://api.huuray.com/swagger/index.html)
+- [Sign up for a Huuray B2B account](https://huuray.com/sign-up/)
+- [Huuray API v4 reference (Swagger)](https://api.huuray.com/swagger/index.html)
 - [huuray.com](https://huuray.com)
 - [Report a bug](https://github.com/ronniegasseholm-prog/huuray-node/issues)
 
 ## Further reading
 
-- [Huuray API v4 reference](https://api.huuray.com/swagger/index.html) — the specification this client is generated from
+- [Huuray API v4 reference (Swagger)](https://api.huuray.com/swagger/index.html) — the specification this client is generated from
+- [Sign up for a Huuray B2B account](https://huuray.com/sign-up/) — if you do not have one yet
 - [Contributing](.github/CONTRIBUTING.md) — including the note on **spec fidelity**: this client deliberately exposes nothing the API does not document, and that rule is enforced by tests
 - [Changelog](CHANGELOG.md)
 
