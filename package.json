@@ -16,13 +16,13 @@
     "sdk",
     "typescript"
   ],
-  "homepage": "https://github.com/huuray/huuray-node#readme",
+  "homepage": "https://github.com/ronniegasseholm-prog/huuray-node#readme",
   "bugs": {
-    "url": "https://github.com/huuray/huuray-node/issues"
+    "url": "https://github.com/ronniegasseholm-prog/huuray-node/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/huuray/huuray-node.git"
+    "url": "git+https://github.com/ronniegasseholm-prog/huuray-node.git"
   },
   "license": "MIT",
   "author": "Huuray A/S (https://huuray.com)",

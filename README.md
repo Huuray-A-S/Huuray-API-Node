@@ -1,11 +1,11 @@
-<img src="https://raw.githubusercontent.com/huuray/huuray-node/main/.github/assets/hero.svg" width="360" align="right" alt="huuray — Node.js SDK for the Huuray API v4"/>
+<img src="https://raw.githubusercontent.com/ronniegasseholm-prog/huuray-node/main/.github/assets/hero.svg" width="360" align="right" alt="huuray — Node.js SDK for the Huuray API v4"/>
 
 # huuray
 
 #### Easily send gift cards and rewards from Node.js
 
 <!-- badges: start -->
-[![CI](https://github.com/huuray/huuray-node/actions/workflows/ci.yml/badge.svg)](https://github.com/huuray/huuray-node/actions/workflows/ci.yml)
+[![CI](https://github.com/ronniegasseholm-prog/huuray-node/actions/workflows/ci.yml/badge.svg)](https://github.com/ronniegasseholm-prog/huuray-node/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/huuray.svg?color=45652a)](https://www.npmjs.com/package/huuray)
 [![License: MIT](https://img.shields.io/badge/license-MIT-45652a.svg)](LICENSE)
 [![API v4](https://img.shields.io/badge/Huuray%20API-v4-9dcf73.svg)](https://api.huuray.com/swagger/index.html)
@@ -319,7 +319,7 @@ npx huuray --help
 
 - [Huuray API reference](https://api.huuray.com/swagger/index.html)
 - [huuray.com](https://huuray.com)
-- [Report a bug](https://github.com/huuray/huuray-node/issues)
+- [Report a bug](https://github.com/ronniegasseholm-prog/huuray-node/issues)
 
 ## Further reading
 
@@ -329,7 +329,7 @@ npx huuray --help
 
 ## Feedback
 
-Found a bug, or something in this library that could be friendlier? Please [file an issue](https://github.com/huuray/huuray-node/issues) or open a pull request.
+Found a bug, or something in this library that could be friendlier? Please [file an issue](https://github.com/ronniegasseholm-prog/huuray-node/issues) or open a pull request.
 
 For the API itself, your account, or a live production problem, contact your Huuray representative — see [SUPPORT.md](.github/SUPPORT.md) for which channel to use. Never open a public issue for a security vulnerability; see [SECURITY.md](.github/SECURITY.md).
 
@@ -340,6 +340,6 @@ Please note that this project is released with a [Contributor Code of Conduct](.
 ---
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/huuray/huuray-node/main/.github/assets/huuray-logo.svg" width="96" alt="Huuray"/><br/>
+  <img src="https://raw.githubusercontent.com/ronniegasseholm-prog/huuray-node/main/.github/assets/huuray-logo.svg" width="96" alt="Huuray"/><br/>
   <sub>Made with 💚 in Denmark by <a href="https://huuray.com">Huuray A/S</a> · <a href="LICENSE">MIT</a></sub>
 </p>

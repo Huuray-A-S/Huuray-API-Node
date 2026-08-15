@@ -7,7 +7,7 @@ Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT
 ## Getting set up
 
 ```bash
-git clone https://github.com/huuray/huuray-node.git
+git clone https://github.com/ronniegasseholm-prog/huuray-node.git
 cd huuray-node
 npm install
 npm test
@@ -73,7 +73,7 @@ Some of this library moves real money. Changes in these areas get closer review,
 
 ## Reporting a bug
 
-[Open an issue.](https://github.com/huuray/huuray-node/issues) Include the SDK version, your Node version, what you called, what you expected, and what happened.
+[Open an issue.](https://github.com/ronniegasseholm-prog/huuray-node/issues) Include the SDK version, your Node version, what you called, what you expected, and what happened.
 
 **Never paste an API token, an API secret, or a voucher code into an issue.** For a vulnerability, see [SECURITY.md](SECURITY.md) instead.
 
