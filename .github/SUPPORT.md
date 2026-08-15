@@ -4,7 +4,7 @@ This library is maintained by Huuray A/S. Which channel you want depends on what
 
 ## Bugs, questions and feature requests about this library
 
-[Open a GitHub issue.](https://github.com/ronniegasseholm-prog/huuray-node/issues) We read every one and aim to respond within five business days.
+[Open a GitHub issue.](https://github.com/Huuray-A-S/Huuray-API-Node/issues) We read every one and aim to respond within five business days.
 
 Good things to include: the SDK version, your Node version, what you called, what you expected, and what happened. **Never paste an API token, an API secret, or a voucher code into an issue.**
 

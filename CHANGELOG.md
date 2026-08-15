@@ -70,5 +70,5 @@ First release. Complete coverage of the Huuray API v4.
 - **Voucher codes are never logged** by this library at any level.
 - **The CLI cannot move value.**
 
-[Unreleased]: https://github.com/ronniegasseholm-prog/huuray-node/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/ronniegasseholm-prog/huuray-node/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Huuray-A-S/Huuray-API-Node/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Huuray-A-S/Huuray-API-Node/releases/tag/v0.1.0
