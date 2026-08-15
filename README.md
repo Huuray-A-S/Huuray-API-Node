@@ -1,4 +1,3 @@
-<img src="https://raw.githubusercontent.com/ronniegasseholm-prog/huuray-node/main/.github/assets/hero.svg" width="360" align="right" alt="huuray — Node.js SDK for the Huuray API v4"/>
 
 # huuray
 
