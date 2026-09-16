@@ -106,6 +106,10 @@ interface OrderParamsBase {
    * PDF template uid from `templates.list()` (`pdfTemplates`), attached as a
    * document to the emails sent by `templateId`. Requires `templateId`, which
    * the API requires to be an email template.
+   * The PDF template must also be available for the ordered product's brand
+   * and country (`brandName` / `country` on the PDF template, where null means
+   * any); otherwise the API rejects the order with a 422, raised as
+   * `HuurayValidationError`. This client does not pre-check that.
    */
   pdfTemplateUid?: string;
   /** Schedule delivery for a future time. Omit to deliver as soon as possible. */
@@ -145,6 +149,10 @@ export interface SendRewardParams {
    * PDF template uid from `templates.list()` (`pdfTemplates`), attached as a
    * document to the email. The API requires `templateId` to be an email
    * template when this is set.
+   * The PDF template must also be available for the ordered product's brand
+   * and country (`brandName` / `country` on the PDF template, where null means
+   * any); otherwise the API rejects the order with a 422, raised as
+   * `HuurayValidationError`. This client does not pre-check that.
    */
   pdfTemplateUid?: string;
   /**
