@@ -208,6 +208,28 @@ describe('PDF delivery templates', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('treats templateId: null as not supplied and rejects before any HTTP request', async () => {
+    // Untyped JS callers can pass null; the spec calls a null DeliveryTemplateId
+    // paired with a DeliveryPDFTemplateUid invalid, so it must never be sent.
+    const { client, calls } = testClient();
+    await expect(
+      client.orders.create({
+        ...base,
+        templateId: null as unknown as number,
+        pdfTemplateUid: PDF_UID,
+      }),
+    ).rejects.toThrow(/templateId is required when pdfTemplateUid is set/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('treats pdfTemplateUid: null as not supplied, so it needs no templateId', async () => {
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
+    await expect(
+      client.orders.create({ ...base, pdfTemplateUid: null as unknown as string }),
+    ).resolves.toBeDefined();
+    expect(calls).toHaveLength(1);
+  });
+
   it('checks only that templateId is present, not what kind of template it is', async () => {
     // Whether templateId is an email template is the API's call; the client cannot know.
     const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });

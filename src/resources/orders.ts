@@ -391,7 +391,9 @@ export class OrdersResource extends Resource {
     if (!Number.isInteger(params.quantity) || params.quantity < 1) {
       throw new TypeError(`quantity must be a positive integer, received ${params.quantity}.`);
     }
-    if (params.pdfTemplateUid !== undefined && params.templateId === undefined) {
+    // Loose equality on purpose: untyped callers can pass null, and null must not
+    // slip through as "templateId supplied" or "pdfTemplateUid supplied".
+    if (params.pdfTemplateUid != null && params.templateId == null) {
       throw new TypeError(
         'templateId is required when pdfTemplateUid is set — the API attaches the PDF template ' +
           'to the emails sent by the delivery template, which must be an email template.',
