@@ -199,18 +199,18 @@ import { redact } from 'huuray';
 logger.info('order complete', redact(result));   // codes stripped
 ```
 
-### 6. An empty result is a 404, not an empty list
+### 6. "Nothing found" can be a 404, not an empty list
 
-The API signals "nothing found" as HTTP 404 with a message like *"There were no active templates"* — so `templates.list()` on an account with no templates, or `orders.search()` with no match, throws `HuurayNotFoundError` rather than returning an empty array. Catch it and read it as "none exist":
+The API can signal "nothing found" as HTTP 404: `orders.search()` with no match throws `HuurayNotFoundError` rather than returning an empty result. `POST /v4/Template` has been observed live both ways (see [CHANGELOG](CHANGELOG.md)): a 404 (*"There were no active templates"*) when the account had no templates, which `templates.list()` throws as `HuurayNotFoundError`, and a 200 with an empty `templates` list for an account with PDF templates but no email or SMS templates. Handle both:
 
 ```ts
 import { HuurayNotFoundError } from 'huuray';
 
 let templates = [];
 try {
-  ({ templates } = await huuray.templates.list());
+  ({ templates } = await huuray.templates.list());   // can be []
 } catch (err) {
-  if (!(err instanceof HuurayNotFoundError)) throw err;   // 404 -> none exist
+  if (!(err instanceof HuurayNotFoundError)) throw err;   // 404: seen when the account had no templates
 }
 ```
 
@@ -328,7 +328,7 @@ npx huuray --help
 
 ## Feedback
 
-Found a bug, or something in this library that could be friendlier? Please [file an issue](https://github.com/Huuray-A-S/Huuray-API-Node/issues) or open a pull request.
+Found a bug, or something in this library that could be friendlier? Please [file an issue](https://github.com/Huuray-A-S/Huuray-API-Node/issues) or start a [discussion](https://github.com/Huuray-A-S/Huuray-API-Node/discussions). This repository does not accept external pull requests — see [CONTRIBUTING.md](.github/CONTRIBUTING.md) for why.
 
 For the API itself, your account, or a live production problem, contact your Huuray representative — see [SUPPORT.md](.github/SUPPORT.md) for which channel to use. Never open a public issue for a security vulnerability; see [SECURITY.md](.github/SECURITY.md).
 

@@ -35,10 +35,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request out almost at once for `0` and for values above 2147483647 (a timer
   overflow), and threw for a fraction, `NaN`, `Infinity` or a negative value only
   when a request was attempted — so an order was reported as indeterminate.
+- **Docs.** The README *Feedback* section no longer invites pull requests, which
+  this repository does not accept. The README, `templates.list()` and this
+  changelog no longer present HTTP 404 as how the API signals every empty result:
+  it was observed on `POST /v4/Template` when the account had no templates, while
+  an account with only PDF templates gets an empty `templates` list. CONTRIBUTING
+  and the spec-drift workflow no longer say a changed specification always opens a
+  pull request: without a `SPEC_DRIFT_TOKEN` secret the run fails instead.
 
-### Confirmed against the live API (2026-08-15)
+### Confirmed against the live API
 
-Every assumption the specification left open has been verified with real calls:
+Every assumption the specification left open has been verified with real calls
+on 2026-08-15, unless another date is given:
 
 - **`X-API-HASH` encoding is lowercase hex** — authenticated against
   `GET /v4/Balance`; the other three candidate encodings return 401. The default
@@ -48,10 +56,13 @@ Every assumption the specification left open has been verified with real calls:
 - **The full order loop works end to end through this SDK**: Balance → sync
   Order (quantity 1, no delivery) → Search by `RefID` (matched) → Cancel
   (full) → Balance.
-- **An empty result set is signalled as HTTP 404**, not as an empty 200 — observed
-  live on `/v4/Template` ("There were no active templates"). This is why the
+- **`POST /v4/Template` answered HTTP 404** ("There were no active templates"),
+  not an empty 200, for an account with no templates. This is why the
   reconciliation examples treat `HuurayNotFoundError` from `/v4/Search` as
   "the order did not land".
+- **An account with PDF templates but no email or SMS templates gets `200`** from
+  `POST /v4/Template`, with an empty `Templates` list and its PDF templates in
+  `PDFTemplates` — observed live 2026-09-16.
 
 ## [0.1.0] — unreleased
 

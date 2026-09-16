@@ -53,7 +53,7 @@ They work by calling every public method with every optional parameter populated
 
 `src/types.gen.ts` is generated from `openapi/huuray-v4.json`. Never edit it by hand. If a type is wrong there, the spec is wrong — raise it, do not patch around it.
 
-The spec itself is vendored deliberately. A scheduled workflow re-downloads it weekly and opens a pull request if it changed, which is how we find out about API changes.
+The spec itself is vendored deliberately. A scheduled workflow re-downloads it weekly and flags any change: it opens a pull request when a `SPEC_DRIFT_TOKEN` secret is configured, and otherwise the run fails. That is how we find out about API changes.
 
 ## Tests
 
