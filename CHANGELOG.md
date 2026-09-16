@@ -43,6 +43,8 @@ First release. Complete coverage of the Huuray API v4.
   template.
 - `request()` — an escape hatch that signs any call.
 - Read-only CLI: `balance`, `catalogue`, `templates`, `stock`, `rates`, `search`.
+- The CLI `templates` command lists PDF templates as well as delivery templates,
+  in table and `--json` output.
 - `redact()` and `safeStringify()` for keeping voucher codes out of logs.
 - Types generated from the vendored OpenAPI specification.
 
