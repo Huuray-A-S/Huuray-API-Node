@@ -10,11 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - **`request()` checks its method and path before anything is sent.** A method
-  that is not an RFC 9110 token, or a path that does not start with `/` or holds
-  anything but visible ASCII, throws a `TypeError` that does not quote it. A path
-  such as `.example.test/…`, `@host/…` or `:8443/…` moved the signed request to
-  another host or port, line breaks and tabs in a path were silently stripped, and
-  a bad method surfaced as a `HuurayConnectionError` quoting it.
+  that is not an RFC 9110 token or is `CONNECT`, `TRACE` or `TRACK` in any case,
+  or a path that does not start with `/` or holds anything but visible ASCII,
+  throws a `TypeError` that does not quote it. A path such as `.example.test/…`,
+  `@host/…` or `:8443/…` moved the signed request to another host or port, line
+  breaks and tabs in a path were silently stripped, and a bad or forbidden method
+  surfaced as a `HuurayConnectionError` quoting it.
 - **Header values are checked before anything is sent.** An `apiToken` or
   `userAgent` containing a control character (a line break, tab, NUL, DEL or
   similar) or a character above U+00FF, and a whitespace-only `apiToken`, throw

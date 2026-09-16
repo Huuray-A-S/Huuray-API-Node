@@ -20,6 +20,9 @@ export const DEFAULT_BASE_URL = 'https://api.huuray.com';
 /** RFC 9110 `token` — the only characters an HTTP method may contain. */
 const HTTP_TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
+/** Methods fetch refuses in any case, though each is a valid token. */
+const FORBIDDEN_METHOD = /^(?:CONNECT|TRACE|TRACK)$/i;
+
 /** A `request()` path: a leading "/" and visible ASCII only. */
 const REQUEST_PATH = /^\/[\x21-\x7E]*$/;
 
@@ -268,8 +271,9 @@ export class HuurayClient {
    * Request and response shapes are exactly as documented in the Huuray API
    * reference; this method does no renaming.
    *
-   * `method` must be an HTTP token and `path` must start with `/` and contain
-   * only visible ASCII; anything else throws a `TypeError` before sending.
+   * `method` must be an HTTP token other than CONNECT, TRACE or TRACK, and
+   * `path` must start with `/` and contain only visible ASCII; anything else
+   * throws a `TypeError` before sending.
    *
    * ```ts
    * await huuray.request('POST', '/v4/Search', { RefID: 'payroll-2026-08-jane' });
@@ -309,6 +313,11 @@ export class HuurayClient {
     if (typeof method !== 'string' || !HTTP_TOKEN.test(method)) {
       throw new TypeError(
         'The request was not sent: the HTTP method must be a token such as GET, POST or DELETE.',
+      );
+    }
+    if (FORBIDDEN_METHOD.test(method)) {
+      throw new TypeError(
+        'The request was not sent: fetch does not allow the CONNECT, TRACE or TRACK method.',
       );
     }
     if (typeof path !== 'string' || !REQUEST_PATH.test(path)) {

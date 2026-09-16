@@ -471,6 +471,29 @@ describe('request() escape hatch', () => {
     expect(err).not.toBeInstanceOf(HuurayConnectionError);
   });
 
+  it.each(['CONNECT', 'connect', 'TRACE', 'tRaCe', 'TRACK', 'track'])(
+    'rejects %s, a token fetch forbids in any case, before anything is sent',
+    async (method) => {
+      const { client, calls } = testClient();
+      const err = await caught(() => client.request(method, '/v4/Balance'));
+      expect(err).toBeInstanceOf(TypeError);
+      expect((err as Error).message).toBe(
+        'The request was not sent: fetch does not allow the CONNECT, TRACE or TRACK method.',
+      );
+      expect(calls).toHaveLength(0);
+    },
+  );
+
+  it('rejects a forbidden method as a TypeError, not the connection error fetch would raise', async () => {
+    // fetch's own error is a TypeError quoting the method, which the client
+    // used to wrap in HuurayConnectionError.
+    const client = new HuurayClient({ apiToken: 't', apiSecret: 's', fetch: validatingFetch() });
+    const err = await caught(() => client.request('Track', '/v4/Search', {}));
+    expect(err).toBeInstanceOf(TypeError);
+    expect(err).not.toBeInstanceOf(HuurayConnectionError);
+    expect(dump(err)).not.toContain('Track');
+  });
+
   it.each([
     ['"@host", which would move the request to another host', '@evil.example/v4/Order'],
     ['".host", which would extend the host name', '.evil.example/v4/Balance'],
