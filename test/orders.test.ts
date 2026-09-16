@@ -119,6 +119,22 @@ describe('recipient validation, as the spec states it', () => {
     const { client } = testClient({ status: 200, json: { OrderUID: 'x' } });
     await expect(client.orders.create(base)).resolves.toBeDefined();
   });
+
+  it.each(['create', 'createSync'] as const)(
+    '%s() treats templateId: null as no delivery template, so recipients are not required',
+    async (method) => {
+      // Untyped JS callers can pass null. The spec: DeliveryTemplateId null means
+      // no delivery, and Recipients "is required unless DeliveryTemplateId is null".
+      // null is passed through, as pdfTemplateUid: null is.
+      const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x', Vouchers: [] } });
+      await expect(
+        client.orders[method]({ ...base, templateId: null as unknown as number }),
+      ).resolves.toBeDefined();
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.body).toMatchObject({ DeliveryTemplateId: null });
+      expect(calls[0]?.body).not.toHaveProperty('Recipients');
+    },
+  );
 });
 
 describe('PDF delivery templates', () => {

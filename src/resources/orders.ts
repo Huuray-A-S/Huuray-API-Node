@@ -407,7 +407,8 @@ export class OrdersResource extends Resource {
           'to the emails sent by the delivery template, which must be an email template.',
       );
     }
-    if (params.templateId !== undefined) {
+    // Loose again: the spec requires Recipients "unless DeliveryTemplateId is null".
+    if (params.templateId != null) {
       const n = params.recipients?.length ?? 0;
       if (n === 0) {
         throw new TypeError(

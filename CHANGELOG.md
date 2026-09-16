@@ -45,6 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   request out almost at once for `0` and for values above 2147483647 (a timer
   overflow), and threw for a fraction, `NaN`, `Infinity` or a negative value only
   when a request was attempted — so an order was reported as indeterminate.
+- **`templateId: null` on an order counts as no delivery template**, which is what
+  the specification says a null `DeliveryTemplateId` means. With no `recipients`,
+  the order is now sent, with `DeliveryTemplateId: null`, instead of throwing that
+  `recipients` is required.
 - **Docs.** The README *Feedback* section no longer invites pull requests, which
   this repository does not accept. The README, `templates.list()` and this
   changelog no longer present HTTP 404 as how the API signals every empty result:
