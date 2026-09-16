@@ -28,8 +28,9 @@ const REQUEST_PATH = /^\/[\x21-\x7E]*$/;
 
 /**
  * A character a header value must not contain: an ASCII control character
- * (0x00-0x1F, 0x7F), which fetch either refuses only once a request is attempted
- * or sends through as-is, or anything above U+00FF, which it cannot encode.
+ * (0x00-0x1F, 0x7F), which fetch refuses only once a request is attempted,
+ * trims from either end, or sends through as-is, or anything above U+00FF,
+ * which it cannot encode.
  */
 const UNSENDABLE_HEADER_CHAR = /[\x00-\x1F\x7F]|[^\x00-\xFF]/;
 
@@ -129,11 +130,12 @@ export class HuurayClient {
         'apiSecret is required. Pass it explicitly, e.g. from process.env.HUURAY_API_SECRET.',
       );
     }
-    // Rejected, never trimmed. fetch refuses a line break or NUL only once a
+    // Rejected, never trimmed. fetch trims a line break or tab at either end and
+    // sends the rest; refuses an interior line break or a NUL only once a
     // request is attempted — as a connection error whose message quotes the
-    // token, and on an order as an indeterminate one — sends a tab through, and
-    // fails on DEL at the socket. The secret is not checked because it is never
-    // sent. The message does not quote the value.
+    // token, and on an order as an indeterminate one — sends an interior tab
+    // through, and fails on DEL at the socket. The secret is not checked because
+    // it is never sent. The message does not quote the value.
     if (UNSENDABLE_HEADER_CHAR.test(options.apiToken)) {
       throw new HuurayConfigError(
         'apiToken contains a control character (a line break, tab, NUL or similar) or a character ' +
@@ -184,7 +186,7 @@ export class HuurayClient {
       throw new HuurayConfigError('baseUrl must use http or https. ' + expectedBaseUrl);
     }
     // User-info ("user@" or "user:password@"): Node's fetch refuses every request
-    // to such a URL as a connection error whose message quotes it, password
+    // to such a URL, which surfaced as a connection error quoting it, password
     // included, and a fetch that accepts user-info sends it to the host as
     // credentials. The authority runs from after the scheme's slashes (either
     // kind, for http and https) to the next slash; any "@" in it is rejected,
@@ -198,11 +200,12 @@ export class HuurayClient {
     }
     this.#hashEncoding = options.hashEncoding;
 
-    // The range Node actually honours. AbortSignal.timeout aborts at once for 0,
-    // warns and fires after 1 ms above 2147483647 (a timer holds a signed 32-bit
-    // delay), and throws for a fraction, NaN, Infinity or a negative value — but
-    // only once a request is attempted, where it reads as a connection error and,
-    // on an order, as an indeterminate one.
+    // The range Node actually honours. AbortSignal.timeout fires after 1 ms for 0
+    // and, with a TimeoutOverflowWarning, for 2147483648 to 4294967295 (a timer
+    // holds a signed 32-bit delay), and throws for a fraction, NaN, Infinity, a
+    // negative value or anything above 4294967295 — but only once a request is
+    // attempted, where it reads as a connection error and, on an order, as an
+    // indeterminate one.
     const timeoutMs = options.timeoutMs ?? 30_000;
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647) {
       throw new HuurayConfigError(
@@ -303,12 +306,15 @@ export class HuurayClient {
     options: SendOptions = {},
   ): Promise<RawResponse<T>> {
     // The method goes into the request line and the path is appended to the
-    // base URL as text. A path not starting with "/" moves the request —
-    // credentials included — to another host (".host", "@host") or port
-    // (":8443"); the URL parser strips line breaks and tabs from the rest and
-    // percent-encodes spaces and non-ASCII; and fetch rejects a bad method only
-    // as a connection error that quotes it. Checked before anything is built, so
-    // a refused request is never mapped to a connection or indeterminate-order
+    // base URL as text. A path not starting with "/" can move the request —
+    // credentials included — to another host (".host") or port (":8443"), as it
+    // did with Node's fetch. "@host" turns the base URL into user-info: Node's
+    // fetch refuses that, which surfaced as a connection error quoting the URL,
+    // but a fetch that accepts user-info sends the request to that host. The URL
+    // parser strips line breaks and tabs from the rest and percent-encodes spaces
+    // and non-ASCII, and fetch rejects a bad or forbidden method only as a
+    // connection error that quotes it. Checked before anything is built, so a
+    // refused request is never mapped to a connection or indeterminate-order
     // error. Neither value is quoted.
     if (typeof method !== 'string' || !HTTP_TOKEN.test(method)) {
       throw new TypeError(

@@ -199,8 +199,8 @@ describe('construction', () => {
   });
 
   it.each([
-    // Node aborts at once for 0; warns and fires after 1 ms above 2147483647;
-    // and throws for the rest only when a request is attempted.
+    // Node fires after 1 ms for 0 and, with a warning, for 2147483648 to
+    // 4294967295; it throws for the rest only when a request is attempted.
     0,
     -1,
     0.5,
@@ -209,6 +209,7 @@ describe('construction', () => {
     Infinity,
     -Infinity,
     2_147_483_648,
+    4_294_967_295,
     4_294_967_296,
     '1000' as unknown as number,
   ])('rejects timeoutMs %o, which the runtime does not honour', (timeoutMs) => {

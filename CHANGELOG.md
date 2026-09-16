@@ -12,10 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`request()` checks its method and path before anything is sent.** A method
   that is not an RFC 9110 token or is `CONNECT`, `TRACE` or `TRACK` in any case,
   or a path that does not start with `/` or holds anything but visible ASCII,
-  throws a `TypeError` that does not quote it. A path such as `.example.test/…`,
-  `@host/…` or `:8443/…` moved the signed request to another host or port, line
-  breaks and tabs in a path were silently stripped, and a bad or forbidden method
-  surfaced as a `HuurayConnectionError` quoting it.
+  throws a `TypeError` that does not quote it. With Node's fetch, a path such as
+  `.example.test/…` or `:8443/…` moved the signed request to another host or port;
+  `@host/…` was refused as a URL with credentials, surfacing as a
+  `HuurayConnectionError` that quoted the URL, but would move the request with a
+  fetch that accepts user-info.
+  Line breaks and tabs in a path were silently stripped, and a bad or forbidden
+  method surfaced as a `HuurayConnectionError` quoting it.
 - **Header values are checked before anything is sent.** An `apiToken` or
   `userAgent` containing a control character (a line break, tab, NUL, DEL or
   similar) or a character above U+00FF, and a whitespace-only `apiToken`, throw
@@ -25,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HuurayConnectionError` whose message quoted the token or nonce — on an order, as
   `HuurayIndeterminateOrderError` for a request that was never sent — and let others
   through, such as a tab or a blank `X-API-TOKEN` or `X-API-NONCE` header.
+  **Behaviour change:** fetch trims a line break or tab at either end of a header
+  value and sends the rest, so an `apiToken` or `userAgent` ending in a line break,
+  such as a token read from a file, used to be sent trimmed; it now throws
+  `HuurayConfigError`. Trim the value first.
 - **A `baseUrl` containing a space, control character or non-ASCII character
   throws `HuurayConfigError`** at construction, instead of being silently stripped,
   percent-encoded or converted to punycode.
@@ -42,9 +49,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`timeoutMs` must be a whole number from 1 to 2147483647**; anything else throws
   `HuurayConfigError` at construction. That is the range Node honours: it timed a
-  request out almost at once for `0` and for values above 2147483647 (a timer
-  overflow), and threw for a fraction, `NaN`, `Infinity` or a negative value only
-  when a request was attempted — so an order was reported as indeterminate.
+  request out after about 1 ms for `0` and, with a `TimeoutOverflowWarning`, for
+  2147483648 to 4294967295, and threw for a fraction, `NaN`, `Infinity`, a negative
+  value or a value above 4294967295 only when a request was attempted — so an order
+  was reported as indeterminate.
 - **`templateId: null` on an order counts as no delivery template**, which is what
   the specification says a null `DeliveryTemplateId` means. With no `recipients`,
   the order is now sent, with `DeliveryTemplateId: null`, instead of throwing that
@@ -55,7 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it was observed on `POST /v4/Template` when the account had no templates, while
   an account with only PDF templates gets an empty `templates` list. CONTRIBUTING
   and the spec-drift workflow no longer say a changed specification always opens a
-  pull request: without a `SPEC_DRIFT_TOKEN` secret the run fails instead.
+  pull request: without a `SPEC_DRIFT_TOKEN` secret the run fails instead. The
+  README *Errors* section and `HuurayError` no longer say that every error extends
+  it: input checks on arguments throw a built-in `TypeError` or `RangeError`
+  before anything is sent.
 
 ### Confirmed against the live API
 

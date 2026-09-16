@@ -8,7 +8,10 @@
 
 import { redact } from './redact.js';
 
-/** Base class for everything this library throws. Catch this to catch it all. */
+/**
+ * Base class for the errors this library defines. Input checks on arguments
+ * throw a built-in `TypeError` or `RangeError` instead, before anything is sent.
+ */
 export class HuurayError extends Error {
   override readonly name: string = 'HuurayError';
   constructor(message: string, options?: { cause?: unknown }) {
