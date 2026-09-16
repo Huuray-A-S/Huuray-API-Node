@@ -43,6 +43,29 @@ describe('nonce generation', () => {
     const hex64 = 'a'.repeat(64);
     expect(() => buildAuthHeaders({ apiToken: 't', apiSecret: 's', nonce: hex64 })).toThrow();
   });
+
+  it.each([
+    // Empty would send a blank header; the rest cannot reach the API exactly as
+    // signed, or make fetch fail with an error that quotes the nonce.
+    ['empty', ''],
+    ['a line break', 'abc\r\nX-Injected: yes'],
+    ['NUL', 'abc\x00'],
+    ['a tab', 'ab\tc'],
+    ['DEL', 'abc\x7F'],
+    ['a space', 'ab c'],
+    ['a non-ASCII character', 'ab\xE9'],
+  ])('rejects a custom nonce that is %s', (_, nonce) => {
+    expect(() => buildAuthHeaders({ apiToken: 't', apiSecret: 's', nonce })).toThrow(
+      /outside visible ASCII/,
+    );
+  });
+
+  it('accepts every visible ASCII character', () => {
+    const visible = Array.from({ length: 94 }, (_, i) => String.fromCharCode(0x21 + i)).join('');
+    for (const nonce of [visible.slice(0, 47), visible.slice(47)]) {
+      expect(() => buildAuthHeaders({ apiToken: 't', apiSecret: 's', nonce })).not.toThrow();
+    }
+  });
 });
 
 describe('request signing', () => {

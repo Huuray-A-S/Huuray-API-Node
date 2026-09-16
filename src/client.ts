@@ -17,8 +17,24 @@ import { TemplatesResource } from './resources/templates.js';
 /** The production API. The spec declares no `servers` block, so this is set here. */
 export const DEFAULT_BASE_URL = 'https://api.huuray.com';
 
+/** RFC 9110 `token` — the only characters an HTTP method may contain. */
+const HTTP_TOKEN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+
+/** A `request()` path: a leading "/" and visible ASCII only. */
+const REQUEST_PATH = /^\/[\x21-\x7E]*$/;
+
+/**
+ * A character a header value must not contain: an ASCII control character
+ * (0x00-0x1F, 0x7F), which fetch either refuses only once a request is attempted
+ * or sends through as-is, or anything above U+00FF, which it cannot encode.
+ */
+const UNSENDABLE_HEADER_CHAR = /[\x00-\x1F\x7F]|[^\x00-\xFF]/;
+
 export interface HuurayClientOptions {
-  /** Your API token. Sent as `X-API-TOKEN`. */
+  /**
+   * Your API token. Sent as `X-API-TOKEN`, so it must not contain a control
+   * character — trim a value read from a file.
+   */
   apiToken: string;
   /** Your API secret. Used to sign each request; never sent and never logged. */
   apiSecret: string;
@@ -35,12 +51,12 @@ export interface HuurayClientOptions {
   retry?: RetryOptions;
   /** Inject a `fetch` implementation — used by the test suite, and for proxies. */
   fetch?: typeof globalThis.fetch;
-  /** Appended to the `User-Agent`, e.g. your app name and version. */
+  /** Appended to the `User-Agent`, e.g. your app name and version. No control characters. */
   userAgent?: string;
   /**
    * Supply your own nonce. Must be unique per request, unused for 60 days, and
-   * at most 50 characters. The default (24 random bytes, base64url) is right for
-   * almost everyone.
+   * 1 to 50 characters of visible ASCII. The default (24 random bytes,
+   * base64url) is right for almost everyone.
    */
   nonceFactory?: () => string;
 }
@@ -95,7 +111,9 @@ export class HuurayClient {
   readonly #nonceFactory: () => string;
 
   constructor(options: HuurayClientOptions) {
-    if (!options?.apiToken) {
+    // A token of only whitespace counts as missing: fetch trims header values,
+    // so the request would go out with a blank X-API-TOKEN.
+    if (!options?.apiToken || String(options.apiToken).trim() === '') {
       throw new HuurayConfigError(
         'apiToken is required. Pass it explicitly, e.g. from process.env.HUURAY_API_TOKEN.',
       );
@@ -105,10 +123,34 @@ export class HuurayClient {
         'apiSecret is required. Pass it explicitly, e.g. from process.env.HUURAY_API_SECRET.',
       );
     }
+    // Rejected, never trimmed. fetch refuses a line break or NUL only once a
+    // request is attempted — as a connection error whose message quotes the
+    // token, and on an order as an indeterminate one — sends a tab through, and
+    // fails on DEL at the socket. The secret is not checked because it is never
+    // sent. The message does not quote the value.
+    if (UNSENDABLE_HEADER_CHAR.test(options.apiToken)) {
+      throw new HuurayConfigError(
+        'apiToken contains a control character (a line break, tab, NUL or similar) or a character ' +
+          'above U+00FF, and cannot be sent as the X-API-TOKEN header. A value read from a file ' +
+          'often ends in a newline; trim it first.',
+      );
+    }
 
     this.#apiToken = options.apiToken;
     this.#apiSecret = options.apiSecret;
-    this.#baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+
+    // The URL parser silently strips tabs, line breaks and surrounding spaces,
+    // percent-encodes other characters and converts a non-ASCII host to
+    // punycode, so a mangled value would be quietly turned into a different URL.
+    // The value is not quoted.
+    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
+    if (/[^\x21-\x7E]/.test(baseUrl)) {
+      throw new HuurayConfigError(
+        'baseUrl contains a space, control character or non-ASCII character. ' +
+          `Expected something like ${JSON.stringify(DEFAULT_BASE_URL)}.`,
+      );
+    }
+    this.#baseUrl = baseUrl.replace(/\/+$/, '');
 
     // Fail here, not at the first request. A baseUrl of '/v4' or 'api.huuray.com'
     // (no scheme) would otherwise be accepted and only surface later as a
@@ -154,6 +196,12 @@ export class HuurayClient {
     this.#fetch = (input, init) => injected(input, init);
 
     this.#userAgent = [`huuray-node/${VERSION}`, options.userAgent].filter(Boolean).join(' ');
+    if (UNSENDABLE_HEADER_CHAR.test(this.#userAgent)) {
+      throw new HuurayConfigError(
+        'userAgent contains a control character (a line break, tab, NUL or similar) or a character ' +
+          'above U+00FF, and cannot be sent as the User-Agent header.',
+      );
+    }
 
     this.balances = new BalancesResource(this);
     this.catalogue = new CatalogueResource(this);
@@ -185,6 +233,9 @@ export class HuurayClient {
    * Request and response shapes are exactly as documented in the Huuray API
    * reference; this method does no renaming.
    *
+   * `method` must be an HTTP token and `path` must start with `/` and contain
+   * only visible ASCII; anything else throws a `TypeError` before sending.
+   *
    * ```ts
    * await huuray.request('POST', '/v4/Search', { RefID: 'payroll-2026-08-jane' });
    * ```
@@ -212,6 +263,25 @@ export class HuurayClient {
     path: string,
     options: SendOptions = {},
   ): Promise<RawResponse<T>> {
+    // The method goes into the request line and the path is appended to the
+    // base URL as text. A path not starting with "/" moves the request —
+    // credentials included — to another host (".host", "@host") or port
+    // (":8443"); the URL parser strips line breaks and tabs from the rest and
+    // percent-encodes spaces and non-ASCII; and fetch rejects a bad method only
+    // as a connection error that quotes it. Checked before anything is built, so
+    // a refused request is never mapped to a connection or indeterminate-order
+    // error. Neither value is quoted.
+    if (typeof method !== 'string' || !HTTP_TOKEN.test(method)) {
+      throw new TypeError(
+        'The request was not sent: the HTTP method must be a token such as GET, POST or DELETE.',
+      );
+    }
+    if (typeof path !== 'string' || !REQUEST_PATH.test(path)) {
+      throw new TypeError(
+        `${method} request was not sent: the path must start with "/" and contain only visible ASCII.`,
+      );
+    }
+
     const url = new URL(this.#baseUrl + path);
     for (const [k, v] of Object.entries(options.query ?? {})) {
       if (v !== undefined) url.searchParams.set(k, String(v));

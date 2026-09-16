@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`request()` checks its method and path before anything is sent.** A method
+  that is not an RFC 9110 token, or a path that does not start with `/` or holds
+  anything but visible ASCII, throws a `TypeError` that does not quote it. A path
+  such as `.example.test/…`, `@host/…` or `:8443/…` moved the signed request to
+  another host or port, line breaks and tabs in a path were silently stripped, and
+  a bad method surfaced as a `HuurayConnectionError` quoting it.
+- **Header values are checked before anything is sent.** An `apiToken` or
+  `userAgent` containing a control character (a line break, tab, NUL, DEL or
+  similar) or a character above U+00FF, and a whitespace-only `apiToken`, throw
+  `HuurayConfigError` at construction. A custom nonce that is empty or not visible
+  ASCII throws a `TypeError` before sending. Neither message quotes the value.
+  Previously fetch refused some of these only when the request was attempted, as a
+  `HuurayConnectionError` whose message quoted the token or nonce — on an order, as
+  `HuurayIndeterminateOrderError` for a request that was never sent — and let others
+  through, such as a tab or a blank `X-API-TOKEN` or `X-API-NONCE` header.
+- **A `baseUrl` containing a space, control character or non-ASCII character
+  throws `HuurayConfigError`** at construction, instead of being silently stripped,
+  percent-encoded or converted to punycode.
+
 ### Confirmed against the live API (2026-08-15)
 
 Every assumption the specification left open has been verified with real calls:

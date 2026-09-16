@@ -93,6 +93,18 @@ export function buildAuthHeaders(opts: {
         'If you supplied a custom nonceFactory, shorten its output.',
     );
   }
+  // The hash covers the nonce exactly as given, but fetch trims whitespace from
+  // the ends of a header value, sends U+0080-U+00FF as single bytes, and refuses
+  // control characters and anything above U+00FF only once the request is
+  // attempted — as a connection error quoting the value. An empty nonce would
+  // go out as a blank header. So: visible ASCII only. The value is never quoted.
+  if (!/^[\x21-\x7E]+$/.test(opts.nonce)) {
+    throw new TypeError(
+      'Nonce is empty or contains a character outside visible ASCII (0x21-0x7E), such as a space, ' +
+        'a line break or a non-ASCII character. If you supplied a custom nonceFactory, make it ' +
+        'return visible ASCII only.',
+    );
+  }
   return {
     'X-API-TOKEN': opts.apiToken,
     'X-API-NONCE': opts.nonce,
