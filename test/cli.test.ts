@@ -1,5 +1,7 @@
+import { inspect } from 'node:util';
 import { describe, expect, it, vi } from 'vitest';
 import { main } from '../src/cli-main.js';
+import { HuurayConfigError } from '../src/index.js';
 import { recordingFetch } from './helpers.js';
 
 /** Throwaway credentials; the fake fetch below means nothing reaches the network. */
@@ -19,6 +21,25 @@ async function runCli(argv: string[], json: unknown) {
     log.mockRestore();
   }
 }
+
+describe('cli configuration', () => {
+  it('refuses a HUURAY_BASE_URL with user-info without quoting it, and sends nothing', async () => {
+    // cli.ts prints the message of any HuurayError.
+    const rec = recordingFetch([]);
+    const err = await main(['balance'], {
+      env: { ...env, HUURAY_BASE_URL: 'https://user:PASS-5e8c@marker.test' },
+      fetch: rec.fetch,
+    }).then(
+      () => expect.unreachable('main must reject'),
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(HuurayConfigError);
+    const text = `${String(err)}\n${inspect(err, { showHidden: true })}`;
+    expect(text).not.toContain('PASS-5e8c');
+    expect(text).not.toContain('marker.test');
+    expect(rec.calls).toHaveLength(0);
+  });
+});
 
 describe('cli templates', () => {
   // Invented values, not taken from any account.

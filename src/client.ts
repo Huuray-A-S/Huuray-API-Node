@@ -38,7 +38,10 @@ export interface HuurayClientOptions {
   apiToken: string;
   /** Your API secret. Used to sign each request; never sent and never logged. */
   apiSecret: string;
-  /** Override the API host. Defaults to {@link DEFAULT_BASE_URL}. */
+  /**
+   * Override the API host. Defaults to {@link DEFAULT_BASE_URL}. An absolute
+   * http(s) URL with no user-info, query or fragment.
+   */
   baseUrl?: string;
   /**
    * Encoding of the `X-API-HASH` digest. Defaults to lowercase hex.
@@ -139,15 +142,26 @@ export class HuurayClient {
     this.#apiToken = options.apiToken;
     this.#apiSecret = options.apiSecret;
 
+    // No baseUrl message quotes the value: it could hold a password.
+    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
+    const expectedBaseUrl = `Expected something like ${JSON.stringify(DEFAULT_BASE_URL)}.`;
+
     // The URL parser silently strips tabs, line breaks and surrounding spaces,
     // percent-encodes other characters and converts a non-ASCII host to
     // punycode, so a mangled value would be quietly turned into a different URL.
-    // The value is not quoted.
-    const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
     if (/[^\x21-\x7E]/.test(baseUrl)) {
       throw new HuurayConfigError(
-        'baseUrl contains a space, control character or non-ASCII character. ' +
-          `Expected something like ${JSON.stringify(DEFAULT_BASE_URL)}.`,
+        'baseUrl contains a space, control character or non-ASCII character. ' + expectedBaseUrl,
+      );
+    }
+    // Paths are appended to the base URL as text, so after a "?" or "#" they
+    // become part of the query or fragment and every request goes to the base
+    // URL's own path.
+    if (/[?#]/.test(baseUrl)) {
+      throw new HuurayConfigError(
+        'baseUrl contains a query ("?") or fragment ("#"), which would send every request to ' +
+          'the wrong path. ' +
+          expectedBaseUrl,
       );
     }
     this.#baseUrl = baseUrl.replace(/\/+$/, '');
@@ -155,20 +169,28 @@ export class HuurayClient {
     // Fail here, not at the first request. A baseUrl of '/v4' or 'api.huuray.com'
     // (no scheme) would otherwise be accepted and only surface later as a
     // confusing transport error — and requiring http(s) keeps credentials from
-    // being aimed at a file:// or ftp:// target by a configuration typo.
+    // being aimed at a file:// or ftp:// target by a configuration typo. The
+    // parser's own error is not kept as the cause: it carries the input.
     let parsedBaseUrl: URL;
     try {
       parsedBaseUrl = new URL(this.#baseUrl);
     } catch {
-      throw new HuurayConfigError(
-        `baseUrl ${JSON.stringify(options.baseUrl)} is not an absolute http(s) URL. ` +
-          `Expected something like ${JSON.stringify(DEFAULT_BASE_URL)}.`,
-      );
+      throw new HuurayConfigError('baseUrl is not an absolute http(s) URL. ' + expectedBaseUrl);
     }
     if (parsedBaseUrl.protocol !== 'http:' && parsedBaseUrl.protocol !== 'https:') {
+      throw new HuurayConfigError('baseUrl must use http or https. ' + expectedBaseUrl);
+    }
+    // User-info ("user@" or "user:password@"): Node's fetch refuses every request
+    // to such a URL as a connection error whose message quotes it, password
+    // included, and a fetch that accepts user-info sends it to the host as
+    // credentials. The authority runs from after the scheme's slashes (either
+    // kind, for http and https) to the next slash; any "@" in it is rejected,
+    // an empty user-info included.
+    const authority = baseUrl.replace(/^https?:[/\\]*/i, '').split(/[/\\]/, 1)[0] ?? '';
+    if (authority.includes('@')) {
       throw new HuurayConfigError(
-        `baseUrl ${JSON.stringify(options.baseUrl)} must use http or https, not ` +
-          `${JSON.stringify(parsedBaseUrl.protocol)}.`,
+        'baseUrl must not contain user-info (a user name or password before "@"). ' +
+          expectedBaseUrl,
       );
     }
     this.#hashEncoding = options.hashEncoding;

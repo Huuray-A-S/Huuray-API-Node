@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A `baseUrl` containing a space, control character or non-ASCII character
   throws `HuurayConfigError`** at construction, instead of being silently stripped,
   percent-encoded or converted to punycode.
+- **A `baseUrl` with user-info (`user@` or `user:password@`), a query (`?`) or a
+  fragment (`#`) throws `HuurayConfigError`** at construction; a trailing slash is
+  still accepted. With Node's fetch, user-info made every request fail as a
+  `HuurayConnectionError` whose message quoted the URL, password included — on an
+  order, as `HuurayIndeterminateOrderError` for a request never sent — and a fetch
+  that accepts user-info would send it to the host as credentials. After `?` or `#`
+  every request path became part of the query or fragment, so every request went to
+  the base URL's own path. No `baseUrl` error message quotes the value any more;
+  those for a URL that was not absolute or not http(s) did.
 
 ### Fixed
 

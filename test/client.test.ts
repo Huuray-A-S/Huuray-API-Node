@@ -28,6 +28,15 @@ async function caught(call: () => unknown): Promise<unknown> {
     );
 }
 
+/** Everything a logger or error reporter could print: properties, stacks, the cause chain. */
+function dump(err: unknown): string {
+  let out = `${String(err)}\n${inspect(err, { depth: Infinity, showHidden: true })}`;
+  for (let e: unknown = err; e instanceof Error; e = e.cause) {
+    out += `\n${e.name}: ${e.message}\n${e.stack ?? ''}`;
+  }
+  return out;
+}
+
 /**
  * A fetch that builds a real `Request` — fetch's own method, URL and header
  * validation, with no network — then answers 200. The recording fetch in
@@ -74,7 +83,55 @@ describe('construction', () => {
     );
   });
 
-  it.each(['https://api.huuray.com', 'http://localhost:8080'])(
+  it.each([
+    ['not absolute', 'marker.test/PASS-5e8c', /not an absolute http\(s\) URL/],
+    ['unparseable', 'https://user:PASS-5e8c@[marker.test', /not an absolute http\(s\) URL/],
+    ['not http(s)', 'ftp://user:PASS-5e8c@marker.test', /must use http or https/],
+  ])('rejects a base URL that is %s without quoting it anywhere', async (_, bad, problem) => {
+    // The URL parser's own error carries the input, so it must not ride along as the cause.
+    const err = await caught(
+      () => new HuurayClient({ apiToken: 't', apiSecret: 's', baseUrl: bad }),
+    );
+    expect(err).toBeInstanceOf(HuurayConfigError);
+    expect((err as Error).message).toMatch(problem);
+    expect((err as Error).message).toContain('Expected something like "https://api.huuray.com".');
+    expect(dump(err)).not.toContain('PASS-5e8c');
+    expect(dump(err)).not.toContain('marker.test');
+  });
+
+  it.each([
+    // Node's fetch refuses every request to a URL with user-info, in a message
+    // quoting it, password included; a fetch that accepts user-info sends it on.
+    ['user-info with a password', 'https://user:PASS-5e8c@marker.test', /user-info/],
+    ['user-info with only a user name', 'https://PASS-5e8c@marker.test', /user-info/],
+    ['user-info with only a password', 'https://:PASS-5e8c@marker.test', /user-info/],
+    ['an empty user-info', 'https://@marker.test/PASS-5e8c', /user-info/],
+    ['user-info after backslashes', 'https:\\\\PASS-5e8c@marker.test', /user-info/],
+    ['user-info and a trailing slash', 'http://user:PASS-5e8c@marker.test:8080/', /user-info/],
+    // Paths are appended as text, so they would land in the query or fragment.
+    ['a query', 'https://marker.test/?key=PASS-5e8c', /query/],
+    ['an empty query', 'https://marker.test/PASS-5e8c?', /query/],
+    ['a fragment', 'https://marker.test#PASS-5e8c', /fragment/],
+    ['an empty fragment', 'https://marker.test/PASS-5e8c/#', /fragment/],
+  ])('rejects a base URL with %s without quoting it anywhere', async (_, bad, problem) => {
+    const err = await caught(
+      () => new HuurayClient({ apiToken: 't', apiSecret: 's', baseUrl: bad }),
+    );
+    expect(err).toBeInstanceOf(HuurayConfigError);
+    expect((err as Error).message).toMatch(problem);
+    expect((err as Error).message).toContain('Expected something like "https://api.huuray.com".');
+    expect(dump(err)).not.toContain('PASS-5e8c');
+    expect(dump(err)).not.toContain('marker.test');
+  });
+
+  it('keeps an "@" in the base URL path, which is not user-info', async () => {
+    const { client, calls } = testClient(undefined, { baseUrl: 'https://example.test/a@b/' });
+    await client.balances.list();
+    expect(calls[0]?.origin).toBe('https://example.test');
+    expect(calls[0]?.path).toBe('/a@b/v4/Balance');
+  });
+
+  it.each(['https://api.huuray.com', 'http://localhost:8080', 'http://localhost:8080/api/'])(
     'accepts an absolute http(s) base URL: %s',
     (good) => {
       expect(
@@ -508,15 +565,6 @@ describe('pre-send failures never leak credentials or recipient data', () => {
       nonceFactory: () => NONCE,
       ...options,
     });
-
-  /** Everything a logger or error reporter could print: properties, stacks, the cause chain. */
-  function dump(err: unknown): string {
-    let out = inspect(err, { depth: Infinity, showHidden: true });
-    for (let e: unknown = err; e instanceof Error; e = e.cause) {
-      out += `\n${e.name}: ${e.message}\n${e.stack ?? ''}`;
-    }
-    return out;
-  }
 
   it.each([
     [
