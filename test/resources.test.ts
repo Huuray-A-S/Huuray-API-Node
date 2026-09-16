@@ -85,6 +85,85 @@ describe('templates.list', () => {
     const { templates } = await client.templates.list();
     expect(templates[0]).toMatchObject({ id: 42, name: 'Default', type: 'Email', language: 'da' });
   });
+
+  it('maps every PDF template field, keeping null country and brand as null', async () => {
+    const { client } = testClient({
+      status: 200,
+      json: {
+        Templates: [],
+        PDFTemplates: [
+          {
+            Uid: '00000000-0000-4000-8000-00000000a001',
+            Name: 'Example PDF - Any',
+            Type: 'Example type',
+            Language: 'en',
+            Country: null,
+            BrandName: null,
+          },
+          {
+            Uid: '00000000-0000-4000-8000-00000000a002',
+            Name: 'Example PDF - Scoped',
+            Type: 'Example type',
+            Language: 'da',
+            Country: 'Examplestan',
+            BrandName: 'Example Brand',
+          },
+        ],
+      },
+    });
+    const result = await client.templates.list();
+    expect(result).toEqual({
+      templates: [],
+      pdfTemplates: [
+        {
+          uid: '00000000-0000-4000-8000-00000000a001',
+          name: 'Example PDF - Any',
+          type: 'Example type',
+          language: 'en',
+          country: null,
+          brandName: null,
+        },
+        {
+          uid: '00000000-0000-4000-8000-00000000a002',
+          name: 'Example PDF - Scoped',
+          type: 'Example type',
+          language: 'da',
+          country: 'Examplestan',
+          brandName: 'Example Brand',
+        },
+      ],
+    });
+  });
+
+  it('returns PDF templates even when there are no delivery templates', async () => {
+    // The bug this guards: mapping only Templates silently dropped every PDF template.
+    const { client } = testClient({
+      status: 200,
+      json: { Templates: [], PDFTemplates: [{ Uid: 'pdf-1', Name: 'Example PDF' }] },
+    });
+    const { templates, pdfTemplates } = await client.templates.list();
+    expect(templates).toEqual([]);
+    expect(pdfTemplates).toEqual([
+      {
+        uid: 'pdf-1',
+        name: 'Example PDF',
+        type: null,
+        language: null,
+        country: null,
+        brandName: null,
+      },
+    ]);
+  });
+
+  it('maps a null PDFTemplates to an empty list', async () => {
+    const { client } = testClient({ status: 200, json: { Templates: [], PDFTemplates: null } });
+    await expect(client.templates.list()).resolves.toEqual({ templates: [], pdfTemplates: [] });
+  });
+
+  it('maps an absent PDFTemplates to an empty list', async () => {
+    const { client } = testClient({ status: 200, json: { Templates: [] } });
+    await expect(client.templates.list()).resolves.toEqual({ templates: [], pdfTemplates: [] });
+  });
 });
 
 describe('stock.check', () => {

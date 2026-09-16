@@ -50,7 +50,7 @@ export type {
   ListCatalogueParams,
   ListCatalogueResult,
 } from './resources/catalogue.js';
-export type { Template, ListTemplatesResult } from './resources/templates.js';
+export type { Template, PdfTemplate, ListTemplatesResult } from './resources/templates.js';
 export type { CheckStockParams, CheckStockResult } from './resources/stock.js';
 export type {
   GetExchangeRateParams,

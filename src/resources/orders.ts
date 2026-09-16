@@ -102,6 +102,12 @@ interface OrderParamsBase {
   refId?: string;
   /** Delivery template id from `templates.list()`. Omit for no delivery. */
   templateId?: number;
+  /**
+   * PDF template uid from `templates.list()` (`pdfTemplates`), attached as a
+   * document to the emails sent by `templateId`. Requires `templateId`, which
+   * the API requires to be an email template.
+   */
+  pdfTemplateUid?: string;
   /** Schedule delivery for a future time. Omit to deliver as soon as possible. */
   deliveryDatetime?: Date | string;
   /** A message included in every email or SMS sent for this order. */
@@ -135,6 +141,12 @@ export interface SendRewardParams {
   recipient: Recipient;
   /** Delivery template id from `templates.list()`. */
   templateId: number;
+  /**
+   * PDF template uid from `templates.list()` (`pdfTemplates`), attached as a
+   * document to the email. The API requires `templateId` to be an email
+   * template when this is set.
+   */
+  pdfTemplateUid?: string;
   /**
    * Your reconciliation key. **Required by this SDK**, though the API treats it
    * as optional: without it, an order that times out cannot be looked up, and
@@ -278,6 +290,7 @@ export class OrdersResource extends Resource {
       templateId: params.templateId,
       recipients: [params.recipient],
       ...compact({
+        pdfTemplateUid: params.pdfTemplateUid,
         expires: params.expires,
         deliveryDatetime: params.deliveryDatetime,
         personalMessage: params.personalMessage,
@@ -378,6 +391,12 @@ export class OrdersResource extends Resource {
     if (!Number.isInteger(params.quantity) || params.quantity < 1) {
       throw new TypeError(`quantity must be a positive integer, received ${params.quantity}.`);
     }
+    if (params.pdfTemplateUid !== undefined && params.templateId === undefined) {
+      throw new TypeError(
+        'templateId is required when pdfTemplateUid is set — the API attaches the PDF template ' +
+          'to the emails sent by the delivery template, which must be an email template.',
+      );
+    }
     if (params.templateId !== undefined) {
       const n = params.recipients?.length ?? 0;
       if (n === 0) {
@@ -403,6 +422,7 @@ export class OrdersResource extends Resource {
       Sync: sync,
       RefID: params.refId,
       DeliveryTemplateId: params.templateId,
+      DeliveryPDFTemplateUid: params.pdfTemplateUid,
       DeliveryDatetime: toDateTime(params.deliveryDatetime),
       PersonalMessage: params.personalMessage,
       Recipients: params.recipients?.map(toWireRecipient),
