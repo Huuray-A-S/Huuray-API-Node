@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   throws `HuurayConfigError`** at construction, instead of being silently stripped,
   percent-encoded or converted to punycode.
 
+### Fixed
+
+- **`timeoutMs` must be a whole number from 1 to 2147483647**; anything else throws
+  `HuurayConfigError` at construction. That is the range Node honours: it timed a
+  request out almost at once for `0` and for values above 2147483647 (a timer
+  overflow), and threw for a fraction, `NaN`, `Infinity` or a negative value only
+  when a request was attempted — so an order was reported as indeterminate.
+
 ### Confirmed against the live API (2026-08-15)
 
 Every assumption the specification left open has been verified with real calls:

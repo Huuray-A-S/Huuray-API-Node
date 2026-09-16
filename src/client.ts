@@ -45,7 +45,7 @@ export interface HuurayClientOptions {
    * If you see a 401 with credentials you know are good, try another value.
    */
   hashEncoding?: HashEncoding;
-  /** Per-request timeout in milliseconds. Default `30000`. */
+  /** Per-request timeout in milliseconds, a whole number from 1 to 2147483647. Default `30000`. */
   timeoutMs?: number;
   /** Retry behaviour for read operations. Writes are never retried. */
   retry?: RetryOptions;
@@ -172,7 +172,20 @@ export class HuurayClient {
       );
     }
     this.#hashEncoding = options.hashEncoding;
-    this.#timeoutMs = options.timeoutMs ?? 30_000;
+
+    // The range Node actually honours. AbortSignal.timeout aborts at once for 0,
+    // warns and fires after 1 ms above 2147483647 (a timer holds a signed 32-bit
+    // delay), and throws for a fraction, NaN, Infinity or a negative value — but
+    // only once a request is attempted, where it reads as a connection error and,
+    // on an order, as an indeterminate one.
+    const timeoutMs = options.timeoutMs ?? 30_000;
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647) {
+      throw new HuurayConfigError(
+        'timeoutMs must be a whole number of milliseconds from 1 to 2147483647, ' +
+          `received ${String(timeoutMs)}.`,
+      );
+    }
+    this.#timeoutMs = timeoutMs;
 
     // `?? DEFAULT` per field, not an object spread: `retry: { maxRetries: undefined }`
     // must fall back to the default, never clobber it — a clobbered maxRetries would

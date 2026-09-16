@@ -141,6 +141,32 @@ describe('construction', () => {
     expect((err as Error).message).not.toContain('MARK-7f3a');
   });
 
+  it.each([
+    // Node aborts at once for 0; warns and fires after 1 ms above 2147483647;
+    // and throws for the rest only when a request is attempted.
+    0,
+    -1,
+    0.5,
+    1500.5,
+    NaN,
+    Infinity,
+    -Infinity,
+    2_147_483_648,
+    4_294_967_296,
+    '1000' as unknown as number,
+  ])('rejects timeoutMs %o, which the runtime does not honour', (timeoutMs) => {
+    expect(() => new HuurayClient({ apiToken: 't', apiSecret: 's', timeoutMs })).toThrow(
+      new HuurayConfigError(
+        'timeoutMs must be a whole number of milliseconds from 1 to 2147483647, ' +
+          `received ${String(timeoutMs)}.`,
+      ),
+    );
+  });
+
+  it.each([1, 30_000, 2_147_483_647])('accepts timeoutMs %j', (timeoutMs) => {
+    expect(() => new HuurayClient({ apiToken: 't', apiSecret: 's', timeoutMs })).not.toThrow();
+  });
+
   it('still sends a userAgent suffix of visible text', async () => {
     const { client, calls } = testClient(undefined, { userAgent: 'my-app/1.2 (payroll)' });
     await client.balances.list();
