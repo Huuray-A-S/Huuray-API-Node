@@ -164,6 +164,7 @@ async function exerciseEverything(): Promise<CapturedRequest[]> {
     expires: new Date('2027-01-01T00:00:00Z'),
     refId: 'ref-1',
     templateId: 42,
+    pdfTemplateUid: '00000000-0000-4000-8000-00000000c001',
     deliveryDatetime: new Date('2026-09-01T09:00:00Z'),
     personalMessage: 'Thank you',
     recipients: [
@@ -180,6 +181,7 @@ async function exerciseEverything(): Promise<CapturedRequest[]> {
     expires: new Date('2027-01-01T00:00:00Z'),
     refId: 'ref-sync',
     templateId: 42,
+    pdfTemplateUid: '00000000-0000-4000-8000-00000000c002',
     deliveryDatetime: new Date('2026-09-01T09:00:00Z'),
     personalMessage: 'Thanks',
     recipients: [{ name: 'C', email: 'c@example.com', refId: 'r-c' }],
@@ -191,6 +193,7 @@ async function exerciseEverything(): Promise<CapturedRequest[]> {
     currency: 'DKK',
     recipient: { name: 'Jane', email: 'jane@example.com' },
     templateId: 42,
+    pdfTemplateUid: '00000000-0000-4000-8000-00000000c003',
     refId: 'ref-2',
     personalMessage: 'Nice work',
     expires: '2027-01-01T00:00:00Z',
@@ -285,6 +288,19 @@ describe('request-conformance gate', () => {
     expect(failures).toEqual([]);
   });
 
+  it('sees DeliveryPDFTemplateUid on every order create, createSync and sendReward make', () => {
+    // exerciseEverything() must populate pdfTemplateUid, or the gate above never
+    // validates the field against the spec.
+    const orders = calls.filter((c) => c.method === 'POST' && c.path === '/v4/Order');
+    expect(orders).toHaveLength(3);
+    for (const call of orders) {
+      expect(call.body).toHaveProperty('DeliveryPDFTemplateUid', expect.any(String));
+    }
+    expect(SPEC.components.schemas['OrderRequest']?.properties).toHaveProperty(
+      'DeliveryPDFTemplateUid',
+    );
+  });
+
   it('sends no body to POST /v4/Template, which declares none', () => {
     const call = calls.find((c) => c.path === '/v4/Template');
     expect(call?.bodyOmitted).toBe(true);
@@ -345,6 +361,16 @@ describe('the gates themselves work', () => {
   it('flags a missing required property', () => {
     const schema = SPEC.components.schemas['CancelRequest']!;
     expect(validate(schema, {}).join('\n')).toMatch(/OrderUID.*required/);
+  });
+
+  it('flags a wrong type on DeliveryPDFTemplateUid', () => {
+    const schema = SPEC.components.schemas['OrderRequest']!;
+    const errors = validate(schema, {
+      Product: { Token: 'tok', Value: 5000, Currency: 'DKK', Quantity: 1 },
+      Sync: false,
+      DeliveryPDFTemplateUid: 123,
+    });
+    expect(errors.join('\n')).toMatch(/DeliveryPDFTemplateUid.*expected string/);
   });
 
   it('flags a wrong type', () => {

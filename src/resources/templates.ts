@@ -17,8 +17,25 @@ export interface Template {
   plainText: string | null;
 }
 
+/** A PDF template — a document attached to the emails a delivery template sends. */
+export interface PdfTemplate {
+  /** Pass this as `pdfTemplateUid` when ordering, alongside an email `templateId`. */
+  uid: string | null;
+  name: string | null;
+  /** PDF template type, as named by the API. */
+  type: string | null;
+  /** ISO alpha-2 language code. */
+  language: string | null;
+  /** The country the template can be used for; `null` means any country. */
+  country: string | null;
+  /** The brand the template can be used for; `null` means any brand. */
+  brandName: string | null;
+}
+
 export interface ListTemplatesResult {
   templates: Template[];
+  /** PDF templates, used to deliver codes as a document attached to an email. */
+  pdfTemplates: PdfTemplate[];
 }
 
 interface WireTemplateItem {
@@ -31,8 +48,17 @@ interface WireTemplateItem {
   FormattedText?: string | null;
   PlainText?: string | null;
 }
+interface WirePdfTemplateItem {
+  Uid?: string | null;
+  Name?: string | null;
+  Type?: string | null;
+  Language?: string | null;
+  Country?: string | null;
+  BrandName?: string | null;
+}
 interface WireTemplateResponse {
   Templates?: WireTemplateItem[] | null;
+  PDFTemplates?: WirePdfTemplateItem[] | null;
 }
 
 export class TemplatesResource extends Resource {
@@ -40,6 +66,9 @@ export class TemplatesResource extends Resource {
    * Lists the delivery templates available to your account.
    *
    * `POST /v4/Template`
+   *
+   * Email and SMS delivery templates are in `templates`; PDF templates, which
+   * attach the codes as a document to an email, are in `pdfTemplates`.
    *
    * The endpoint declares no request body in the API specification, so this
    * client sends none — confirmed accepted by the live API.
@@ -63,6 +92,14 @@ export class TemplatesResource extends Resource {
         subject: t.Subject ?? null,
         formattedText: t.FormattedText ?? null,
         plainText: t.PlainText ?? null,
+      })),
+      pdfTemplates: (data?.PDFTemplates ?? []).map((t) => ({
+        uid: t.Uid ?? null,
+        name: t.Name ?? null,
+        type: t.Type ?? null,
+        language: t.Language ?? null,
+        country: t.Country ?? null,
+        brandName: t.BrandName ?? null,
       })),
     };
   }

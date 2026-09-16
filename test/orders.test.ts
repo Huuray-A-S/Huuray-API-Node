@@ -121,6 +121,103 @@ describe('recipient validation, as the spec states it', () => {
   });
 });
 
+describe('PDF delivery templates', () => {
+  const PDF_UID = '00000000-0000-4000-8000-00000000b001';
+  const delivery = { templateId: 42, recipients: [{ email: 'a@example.com' }] };
+  const reward = {
+    productToken: 'tok',
+    value: 5000,
+    currency: 'DKK',
+    recipient: { email: 'jane@example.com' },
+    templateId: 42,
+    refId: 'r-pdf',
+  };
+
+  it('create() sends DeliveryPDFTemplateUid when pdfTemplateUid is given', async () => {
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
+    await client.orders.create({ ...base, ...delivery, pdfTemplateUid: PDF_UID });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toMatchObject({
+      DeliveryTemplateId: 42,
+      DeliveryPDFTemplateUid: PDF_UID,
+    });
+  });
+
+  it('createSync() sends DeliveryPDFTemplateUid when pdfTemplateUid is given', async () => {
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x', Vouchers: [] } });
+    await client.orders.createSync({ ...base, ...delivery, pdfTemplateUid: PDF_UID });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toMatchObject({
+      DeliveryTemplateId: 42,
+      DeliveryPDFTemplateUid: PDF_UID,
+    });
+  });
+
+  it('sendReward() passes pdfTemplateUid through as DeliveryPDFTemplateUid', async () => {
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
+    await client.orders.sendReward({ ...reward, pdfTemplateUid: PDF_UID });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toMatchObject({
+      DeliveryTemplateId: 42,
+      DeliveryPDFTemplateUid: PDF_UID,
+    });
+  });
+
+  it('client.sendReward() passes it through too', async () => {
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
+    await client.sendReward({ ...reward, pdfTemplateUid: PDF_UID });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toMatchObject({ DeliveryPDFTemplateUid: PDF_UID });
+  });
+
+  it('create() omits the DeliveryPDFTemplateUid key when not given', async () => {
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
+    await client.orders.create({ ...base, ...delivery });
+    expect(calls[0]?.body).not.toHaveProperty('DeliveryPDFTemplateUid');
+  });
+
+  it('createSync() omits the DeliveryPDFTemplateUid key when not given', async () => {
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x', Vouchers: [] } });
+    await client.orders.createSync({ ...base, ...delivery });
+    expect(calls[0]?.body).not.toHaveProperty('DeliveryPDFTemplateUid');
+  });
+
+  it('sendReward() omits the DeliveryPDFTemplateUid key when not given', async () => {
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
+    await client.orders.sendReward(reward);
+    expect(calls[0]?.body).not.toHaveProperty('DeliveryPDFTemplateUid');
+  });
+
+  it('create() rejects pdfTemplateUid without templateId before any HTTP request', async () => {
+    const { client, calls } = testClient();
+    await expect(client.orders.create({ ...base, pdfTemplateUid: PDF_UID })).rejects.toThrow(
+      /templateId is required when pdfTemplateUid is set/,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it('createSync() rejects pdfTemplateUid without templateId before any HTTP request', async () => {
+    const { client, calls } = testClient();
+    await expect(
+      client.orders.createSync({
+        ...base,
+        recipients: [{ email: 'a@example.com' }],
+        pdfTemplateUid: PDF_UID,
+      }),
+    ).rejects.toThrow(/templateId is required when pdfTemplateUid is set/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it('checks only that templateId is present, not what kind of template it is', async () => {
+    // Whether templateId is an email template is the API's call; the client cannot know.
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
+    await expect(
+      client.orders.create({ ...base, ...delivery, templateId: 7, pdfTemplateUid: PDF_UID }),
+    ).resolves.toBeDefined();
+    expect(calls).toHaveLength(1);
+  });
+});
+
 describe('sendReward', () => {
   it('makes exactly one POST /v4/Order with Quantity 1 and Sync false', async () => {
     const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x', RefID: 'r' } });
