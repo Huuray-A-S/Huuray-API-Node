@@ -131,11 +131,12 @@ export class HuurayClient {
       );
     }
     // Rejected, never trimmed. fetch trims a line break or tab at either end and
-    // sends the rest; refuses an interior line break or a NUL only once a
-    // request is attempted — as a connection error whose message quotes the
-    // token, and on an order as an indeterminate one — sends an interior tab
-    // through, and fails on DEL at the socket. The secret is not checked because
-    // it is never sent. The message does not quote the value.
+    // sends the rest, and sends an interior tab through. It refuses an interior
+    // line break or a NUL only once a request is attempted — as a connection
+    // error whose message quotes the token, and on an order as an indeterminate
+    // one — and DEL or another control character likewise, as "fetch failed"
+    // without the value. The secret is not checked because it is never sent.
+    // The message does not quote the value.
     if (UNSENDABLE_HEADER_CHAR.test(options.apiToken)) {
       throw new HuurayConfigError(
         'apiToken contains a control character (a line break, tab, NUL or similar) or a character ' +

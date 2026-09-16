@@ -261,7 +261,7 @@ await huuray.request('POST', '/v4/Search', { RefID: 'payroll-2026-08-jane' });
 
 ## Errors
 
-Every error class below extends `HuurayError`. Input checks on arguments throw a built-in `TypeError` or `RangeError` instead, before anything is sent.
+Every error class below extends `HuurayError`. Input checks on arguments throw a built-in `TypeError` or `RangeError` instead, before the request they check is sent.
 
 | Class | When |
 |---|---|

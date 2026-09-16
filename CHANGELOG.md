@@ -25,9 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HuurayConfigError` at construction. A custom nonce that is empty or not visible
   ASCII throws a `TypeError` before sending. Neither message quotes the value.
   Previously fetch refused some of these only when the request was attempted, as a
-  `HuurayConnectionError` whose message quoted the token or nonce — on an order, as
-  `HuurayIndeterminateOrderError` for a request that was never sent — and let others
-  through, such as a tab or a blank `X-API-TOKEN` or `X-API-NONCE` header.
+  `HuurayConnectionError`, whose message quoted the token or nonce for a line break
+  or NUL — on an order, as `HuurayIndeterminateOrderError` for a request that was
+  never sent — and let others through, such as a tab or a blank `X-API-TOKEN` or
+  `X-API-NONCE` header.
   **Behaviour change:** fetch trims a line break or tab at either end of a header
   value and sends the rest, so an `apiToken` or `userAgent` ending in a line break,
   such as a token read from a file, used to be sent trimmed; it now throws
@@ -66,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pull request: without a `SPEC_DRIFT_TOKEN` secret the run fails instead. The
   README *Errors* section and `HuurayError` no longer say that every error extends
   it: input checks on arguments throw a built-in `TypeError` or `RangeError`
-  before anything is sent.
+  before the request they check is sent.
 
 ### Confirmed against the live API
 
