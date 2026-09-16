@@ -107,6 +107,7 @@ describe('construction', () => {
     ['user-info with only a password', 'https://:PASS-5e8c@marker.test', /user-info/],
     ['an empty user-info', 'https://@marker.test/PASS-5e8c', /user-info/],
     ['user-info after backslashes', 'https:\\\\PASS-5e8c@marker.test', /user-info/],
+    ['user-info with an upper-case scheme', 'HTTPS://user:PASS-5e8c@marker.test', /user-info/],
     ['user-info and a trailing slash', 'http://user:PASS-5e8c@marker.test:8080/', /user-info/],
     // Paths are appended as text, so they would land in the query or fragment.
     ['a query', 'https://marker.test/?key=PASS-5e8c', /query/],
@@ -126,6 +127,13 @@ describe('construction', () => {
 
   it('keeps an "@" in the base URL path, which is not user-info', async () => {
     const { client, calls } = testClient(undefined, { baseUrl: 'https://example.test/a@b/' });
+    await client.balances.list();
+    expect(calls[0]?.origin).toBe('https://example.test');
+    expect(calls[0]?.path).toBe('/a@b/v4/Balance');
+  });
+
+  it('keeps an "@" after a backslash, which ends the host as "/" does', async () => {
+    const { client, calls } = testClient(undefined, { baseUrl: 'https://example.test\\a@b/' });
     await client.balances.list();
     expect(calls[0]?.origin).toBe('https://example.test');
     expect(calls[0]?.path).toBe('/a@b/v4/Balance');
