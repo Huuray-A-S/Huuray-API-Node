@@ -112,6 +112,36 @@ await huuray.orders.create({
 });
 ```
 
+## Attaching a purchase order
+
+An order can carry the fields of the B2B send pages: `additionalReference`, `customerReference`, `articleNumber`, `description` and a purchase order file. All five are optional, and each is accepted only when the matching option is enabled on your B2B account — otherwise the API rejects the order with a 422.
+
+The file is uploaded first, and the order refers to it by the token that comes back:
+
+```ts
+import { readFile } from 'node:fs/promises';
+
+const { token } = await huuray.uploads.create({
+  file:        await readFile('purchase-order-4711.pdf'),   // Uint8Array, ArrayBuffer or Blob
+  fileName:    'purchase-order-4711.pdf',
+  contentType: 'application/pdf',   // optional; sent as application/octet-stream if omitted
+});
+
+await huuray.orders.create({
+  productToken:           'the-product-you-chose',
+  value:                  500_00,
+  currency:               'DKK',
+  quantity:               10,
+  additionalReference:    'PO-4711',
+  customerReference:      'Jane Doe',
+  articleNumber:          'ART-1',
+  description:            'Ten gift cards for the sales team',
+  purchaseOrderFileToken: token!,
+});
+```
+
+The token is consumed by the order it is used with. **Uploads are never retried automatically:** each one is stored as a pending upload until an order uses it, the API allows at most 5 of those per account, and there is no way to look one up. A timeout or dropped connection throws `HuurayTimeoutError` or `HuurayConnectionError`, and the upload may still have been stored.
+
 ## Seven things worth knowing
 
 These are the parts of the API that are easy to get wrong. The client handles each one, but the behaviour is worth understanding.
@@ -235,7 +265,7 @@ new HuurayClient({ apiToken, apiSecret, hashEncoding: 'base64' });
 
 ## API coverage
 
-All nine v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
+All ten v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
 
 | Method | Endpoint |
 |---|---|
@@ -250,6 +280,7 @@ All nine v4 operations, and nothing else. Every method maps to one operation in 
 | `orders.search(…)` | `POST /v4/Search` |
 | `orders.resend(…)` | `POST /v4/Resend` |
 | `orders.cancel(…)` | `DELETE /v4/Cancel` |
+| `uploads.create({ file, fileName, contentType })` | `POST /v4/Upload` |
 
 Need something not covered? `request()` signs any call for you:
 

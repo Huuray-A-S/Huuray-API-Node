@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Purchase order files and references on orders — built against a predicted
+  specification.** The API change is not deployed yet; `openapi/huuray-v4.json`
+  is derived from the unreleased API branch and must be replaced by the published
+  specification before release.
+- **`uploads.create({ file, fileName, contentType })`** — `POST /v4/Upload`, sent
+  as `multipart/form-data` with one part named `File`. `file` is a `Uint8Array`
+  (or `Buffer`), `ArrayBuffer` or `Blob`; without `contentType` the part is sent
+  as `application/octet-stream`. Returns an `UploadResult`: `token`, `fileName`,
+  `contentType`, `size`. Pass `token` to an order as `purchaseOrderFileToken`.
+- **`orders.create()`, `orders.createSync()` and `sendReward()` accept
+  `additionalReference`, `customerReference`, `articleNumber`, `description` and
+  `purchaseOrderFileToken`**, all optional. Each is sent under its specification
+  name exactly as given, and omitted when not given or `null`; the client checks
+  none of them, the API does.
+- **Uploads are never retried.** Each one is stored as a pending upload until an
+  order uses it, and none can be looked up, so a timeout or dropped connection
+  throws the ordinary `HuurayTimeoutError` or `HuurayConnectionError` — not
+  `HuurayIndeterminateOrderError` — with a message saying the upload may still
+  have been stored. `HuurayTimeoutError` takes an optional `note` for this.
+- **`redact()` masks `FileName` and `CustomerReference`**, in either casing, as
+  personal data, and prints binary data (a `Uint8Array`, `ArrayBuffer`,
+  `DataView` or `Blob`) as `[N bytes]` instead of walking it byte by byte.
+- **The conformance gates check a `multipart/form-data` body** by its part names
+  against the schema, and a `format: binary` property as a file part with a file
+  name, failing closed on any other shape. The test fetch no longer JSON-parses a
+  body that is not sent as JSON, so such a body fails a gate instead of the run.
+
 ### Security
 
 - **`request()` checks its method and path before anything is sent.** A method

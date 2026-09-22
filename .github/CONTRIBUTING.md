@@ -65,7 +65,7 @@ The spec itself is vendored deliberately. A scheduled workflow re-downloads it w
 
 Some of this library moves real money. Changes in these areas get closer review, and pull requests that weaken a guard will be asked to justify it:
 
-- **Never add automatic retries to `/v4/Order`, `/v4/Resend` or `/v4/Cancel`.** There is no idempotency key. A retried order orders twice; a retried resend re-delivers a live gift card.
+- **Never add automatic retries to `/v4/Order`, `/v4/Resend`, `/v4/Cancel` or `/v4/Upload`.** There is no idempotency key. A retried order orders twice; a retried resend re-delivers a live gift card; a retried upload stores the file twice.
 - **Never widen the CLI to move value.** It is read-only on purpose.
 - **Never log a voucher code**, at any level, in any code path.
 - **Keep amounts as integers in minor units.** No floats, no silent rounding.
