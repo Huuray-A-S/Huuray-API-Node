@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   name exactly as given, and omitted when not given or `null`; the client checks
   none of them, the API does.
 - **Uploads are never retried.** Each one is stored as a pending upload until an
-  order uses it, and none can be looked up, so a timeout or dropped connection
+  order uses its token or it is cleaned up, and none can be looked up, so a timeout or dropped connection
   throws the ordinary `HuurayTimeoutError` or `HuurayConnectionError` — not
   `HuurayIndeterminateOrderError` — with a message saying the upload may still
   have been stored. `HuurayTimeoutError` takes an optional `note` for this.
