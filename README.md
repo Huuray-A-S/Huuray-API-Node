@@ -132,6 +132,7 @@ await huuray.orders.create({
   value:                  500_00,
   currency:               'DKK',
   quantity:               10,
+  refId:                  'po-4711',
   additionalReference:    'PO-4711',
   customerReference:      'Jane Doe',
   articleNumber:          'ART-1',
@@ -140,7 +141,7 @@ await huuray.orders.create({
 });
 ```
 
-The token is consumed by the order it is used with. **Uploads are never retried automatically:** each one is stored as a pending upload until an order uses it, the API allows at most 5 of those per account, and there is no way to look one up. A timeout or dropped connection throws `HuurayTimeoutError` or `HuurayConnectionError`, and the upload may still have been stored.
+The token is consumed by the order it is used with. **Uploads are never retried automatically:** each one is stored as a pending upload until an order uses its token or the upload is cleaned up, the API allows at most 5 of those per account, and there is no way to look one up. A timeout or dropped connection throws `HuurayTimeoutError` or `HuurayConnectionError`, and the upload may still have been stored.
 
 ## Seven things worth knowing
 

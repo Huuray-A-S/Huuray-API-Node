@@ -55,10 +55,10 @@ export class UploadsResource extends Resource {
    * it is used with.
    *
    * **Never retried.** Every upload stores a new file that counts as pending
-   * until an order uses it, and no endpoint looks an upload up. A timeout or
-   * dropped connection throws the ordinary {@link HuurayTimeoutError} or
-   * {@link HuurayConnectionError}, whose message says the upload may still have
-   * been stored.
+   * until an order uses its token or the upload is cleaned up, and no endpoint
+   * looks an upload up. A timeout or dropped connection throws the ordinary
+   * {@link HuurayTimeoutError} or {@link HuurayConnectionError}, whose message
+   * says the upload may still have been stored.
    */
   async create(params: CreateUploadParams): Promise<UploadResult> {
     const { file, fileName, contentType } = params;
