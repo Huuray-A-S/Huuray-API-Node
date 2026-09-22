@@ -665,6 +665,18 @@ describe('the multipart gate works', () => {
     expect(validateMultipart(media, body(part()), 'upload').join('\n')).toMatch(
       /not a plain object/,
     );
+    // Still composed, even alongside the type and properties of a plain object.
+    const alongside = { ...MEDIA, schema: { ...deref(MEDIA.schema!), allOf: [MEDIA.schema!] } };
+    expect(validateMultipart(alongside, body(part()), 'upload').join('\n')).toMatch(
+      /not a plain object/,
+    );
+  });
+
+  it('fails closed on a schema with properties but no type', () => {
+    const media = { ...MEDIA, schema: { properties: deref(MEDIA.schema!).properties } };
+    expect(validateMultipart(media, body(part()), 'upload').join('\n')).toMatch(
+      /not a plain object/,
+    );
   });
 
   it('reports a body that could not be parsed', () => {
@@ -694,6 +706,15 @@ describe('the multipart gate works', () => {
     expect(checkRequestBody(order, call({ path: '/v4/Order' })).join('\n')).toMatch(
       /declares an application\/json body, but the SDK sent a multipart body/,
     );
+  });
+
+  it('checks the parts of a multipart body sent to the multipart operation', () => {
+    const invented = call({ multipart: body(part(), part({ name: 'Invented' })) });
+    expect(checkRequestBody(UPLOAD, invented).join('\n')).toMatch(
+      /Invented.*not defined in the spec/,
+    );
+    const noFilename = call({ multipart: body(part({ filename: undefined })) });
+    expect(checkRequestBody(UPLOAD, noFilename).join('\n')).toMatch(/File.*no filename/);
   });
 
   it('the harness records a non-JSON body as "other" and never JSON-parses multipart', async () => {
