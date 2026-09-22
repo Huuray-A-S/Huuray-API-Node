@@ -10,7 +10,10 @@
 /** Response fields that carry redeemable value and are never logged. */
 export const SECRET_FIELDS = ['Code', 'CVV', 'RedeemLink', 'code', 'cvv', 'redeemLink'] as const;
 
-/** Fields carrying credentials or personal data, masked in any diagnostic output. */
+/**
+ * Fields carrying credentials or personal data, masked in any diagnostic output.
+ * A purchase order's file name and customer reference routinely name a person.
+ */
 export const SENSITIVE_FIELDS = [
   'X-API-TOKEN',
   'X-API-HASH',
@@ -20,6 +23,10 @@ export const SENSITIVE_FIELDS = [
   'email',
   'Phone',
   'phone',
+  'FileName',
+  'fileName',
+  'CustomerReference',
+  'customerReference',
 ] as const;
 
 const SECRET = new Set<string>(SECRET_FIELDS);
@@ -34,6 +41,12 @@ const SENSITIVE = new Set<string>(SENSITIVE_FIELDS);
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 12) return '[redacted: too deep]';
   if (value === null || typeof value !== 'object') return value;
+  // File contents are never printed, only their size — walked as an object, a
+  // byte array would print every byte.
+  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+    return `[${value.byteLength} bytes]`;
+  }
+  if (value instanceof Blob) return `[${value.size} bytes]`;
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
 
   const out: Record<string, unknown> = {};

@@ -41,8 +41,13 @@ export class HuurayConnectionError extends HuurayError {
 /** The request exceeded the configured timeout. */
 export class HuurayTimeoutError extends HuurayConnectionError {
   override readonly name = 'HuurayTimeoutError';
-  constructor(method: string, path: string, readonly timeoutMs: number) {
-    super(`${method} ${path} timed out after ${timeoutMs}ms.`, method, path);
+  /** @param note Appended to the message, e.g. what the timeout may have left behind. */
+  constructor(method: string, path: string, readonly timeoutMs: number, note?: string) {
+    super(
+      `${method} ${path} timed out after ${timeoutMs}ms.${note ? ` ${note}` : ''}`,
+      method,
+      path,
+    );
   }
 }
 

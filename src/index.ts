@@ -73,3 +73,4 @@ export type {
   CancelResult,
   CancelledVoucher,
 } from './resources/orders.js';
+export type { CreateUploadParams, UploadResult } from './resources/uploads.js';

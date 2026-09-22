@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { HuurayIndeterminateOrderError, SYNC_QUANTITY_LIMIT } from '../src/index.js';
+import {
+  HuurayIndeterminateOrderError,
+  SYNC_QUANTITY_LIMIT,
+  type CreateOrderParams,
+  type HuurayApiError,
+  type HuurayClient,
+  type SendRewardParams,
+} from '../src/index.js';
 import { testClient } from './helpers.js';
 
 const base = { productToken: 'tok', value: 5000, currency: 'DKK', quantity: 1 } as const;
@@ -253,6 +260,109 @@ describe('PDF delivery templates', () => {
       client.orders.create({ ...base, ...delivery, templateId: 7, pdfTemplateUid: PDF_UID }),
     ).resolves.toBeDefined();
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe('purchase order fields', () => {
+  const fields = {
+    additionalReference: 'PO-4711',
+    customerReference: 'Jane Doe',
+    articleNumber: 'ART-1',
+    description: 'Ten gift cards for the sales team',
+    purchaseOrderFileToken: '60050460-7a2d-42a8-a4dd-5cef88ad8374',
+  };
+  const wire: Record<keyof typeof fields, string> = {
+    additionalReference: 'AdditionalReference',
+    customerReference: 'CustomerReference',
+    articleNumber: 'ArticleNumber',
+    description: 'Description',
+    purchaseOrderFileToken: 'PurchaseOrderFileToken',
+  };
+  const reward = {
+    productToken: 'tok',
+    value: 5000,
+    currency: 'DKK',
+    recipient: { email: 'jane@example.com' },
+    templateId: 42,
+    refId: 'r-po',
+  };
+  type Send = (c: HuurayClient, extra: object) => Promise<unknown>;
+  const order: Send = (c, extra) => c.orders.create({ ...base, ...extra });
+  const methods: [string, Send][] = [
+    ['orders.create()', order],
+    ['orders.createSync()', (c, extra) => c.orders.createSync({ ...base, ...extra })],
+    ['orders.sendReward()', (c, extra) => c.orders.sendReward({ ...reward, ...extra })],
+    ['client.sendReward()', (c, extra) => c.sendReward({ ...reward, ...extra })],
+  ];
+  const sent = async (call: Send, extra: object) => {
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x', Vouchers: [] } });
+    await call(client, extra);
+    expect(calls).toHaveLength(1);
+    return calls[0]?.body as Record<string, unknown>;
+  };
+
+  it.each(methods)('%s sends each field under its spec name', async (_, call) => {
+    expect(await sent(call, fields)).toMatchObject({
+      AdditionalReference: 'PO-4711',
+      CustomerReference: 'Jane Doe',
+      ArticleNumber: 'ART-1',
+      Description: 'Ten gift cards for the sales team',
+      PurchaseOrderFileToken: '60050460-7a2d-42a8-a4dd-5cef88ad8374',
+    });
+  });
+
+  it.each(methods)('%s sends each field on its own, without the others', async (_, call) => {
+    for (const [name, value] of Object.entries(fields)) {
+      const body = await sent(call, { [name]: value });
+      const present = Object.values(wire).filter((key) => key in body);
+      expect(present).toEqual([wire[name as keyof typeof fields]]);
+    }
+  });
+
+  it.each(methods)('%s omits all five keys when none is given', async (_, call) => {
+    const body = await sent(call, {});
+    for (const key of Object.values(wire)) expect(body).not.toHaveProperty(key);
+  });
+
+  it.each(methods)('%s omits a field given as null, rather than send null', async (_, call) => {
+    const nulls = Object.fromEntries(Object.keys(fields).map((k) => [k, null]));
+    const body = await sent(call, nulls);
+    for (const key of Object.values(wire)) expect(body).not.toHaveProperty(key);
+  });
+
+  it('sends values verbatim — the API, not the client, checks length, content and format', async () => {
+    const verbatim = {
+      additionalReference: '  PO 4711  ',
+      customerReference: '',
+      articleNumber: 'x'.repeat(300),
+      description: '<script>alert(1)</script>',
+      purchaseOrderFileToken: 'not-a-guid',
+    };
+    expect(await sent(order, verbatim)).toMatchObject({
+      AdditionalReference: '  PO 4711  ',
+      CustomerReference: '',
+      ArticleNumber: 'x'.repeat(300),
+      Description: '<script>alert(1)</script>',
+      PurchaseOrderFileToken: 'not-a-guid',
+    });
+  });
+
+  it('masks a customer reference an error response echoes', async () => {
+    const { client } = testClient({
+      status: 400,
+      json: { Status: 400, StatusMessage: 'bad', CustomerReference: 'Jane Doe' },
+    });
+    const err: unknown = await client.orders
+      .create({ ...base, ...fields })
+      .then(() => expect.unreachable('must reject'), (e: unknown) => e);
+    expect(JSON.stringify((err as HuurayApiError).body)).not.toContain('Jane Doe');
+  });
+
+  it('params types accept the five fields', () => {
+    // A compile-time check: both parameter types carry them.
+    const create: CreateOrderParams = { ...base, ...fields };
+    const send: SendRewardParams = { ...reward, ...fields };
+    expect([create, send]).toHaveLength(2);
   });
 });
 

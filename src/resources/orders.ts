@@ -87,7 +87,42 @@ function toWireRecipient(r: Recipient): WireRecipient {
 
 /* ------------------------------------------------------------------ orders */
 
-interface OrderParamsBase {
+/**
+ * The optional order fields of the B2B send pages. Each is sent exactly as
+ * given, and only when given; this client checks none of them — the API does.
+ */
+interface PurchaseOrderFields {
+  /**
+   * An additional reference for the order, shown on the invoice (max 250
+   * characters). Only accepted when Additional Reference is enabled for your
+   * account; otherwise the API rejects the order with a 422.
+   */
+  additionalReference?: string;
+  /**
+   * A customer reference, used as the customer contact on the invoice (max 250
+   * characters). Only accepted when Customer Reference is enabled for your
+   * account; otherwise a 422.
+   */
+  customerReference?: string;
+  /**
+   * An article number, shown on the invoice line (max 250 characters). Only
+   * accepted when Article Number is enabled for your account; otherwise a 422.
+   */
+  articleNumber?: string;
+  /**
+   * A description, shown on the invoice line (max 250 characters). Only
+   * accepted when Description is enabled for your account; otherwise a 422.
+   */
+  description?: string;
+  /**
+   * A purchase order file to attach to the invoice: the `token` from
+   * `uploads.create()`, consumed by the order it is used with. Only accepted
+   * when Purchase Order upload is enabled for your account; otherwise a 422.
+   */
+  purchaseOrderFileToken?: string;
+}
+
+interface OrderParamsBase extends PurchaseOrderFields {
   /** Product identifier from `catalogue.list()`. */
   productToken: string;
   /** Denomination **in minor units** — 50.00 is `5000`. Must be an integer. */
@@ -137,7 +172,7 @@ export interface CreateSyncOrderResult extends CreateOrderResult {
   vouchers: Voucher[];
 }
 
-export interface SendRewardParams {
+export interface SendRewardParams extends PurchaseOrderFields {
   productToken: string;
   /** Denomination **in minor units** — 50.00 is `5000`. */
   value: number;
@@ -302,6 +337,11 @@ export class OrdersResource extends Resource {
         expires: params.expires,
         deliveryDatetime: params.deliveryDatetime,
         personalMessage: params.personalMessage,
+        additionalReference: params.additionalReference,
+        customerReference: params.customerReference,
+        articleNumber: params.articleNumber,
+        description: params.description,
+        purchaseOrderFileToken: params.purchaseOrderFileToken,
       }),
     });
   }
@@ -437,6 +477,12 @@ export class OrdersResource extends Resource {
       DeliveryDatetime: toDateTime(params.deliveryDatetime),
       PersonalMessage: params.personalMessage,
       Recipients: params.recipients?.map(toWireRecipient),
+      // null is not given, as undefined is: the key is omitted, never sent as null.
+      AdditionalReference: params.additionalReference ?? undefined,
+      CustomerReference: params.customerReference ?? undefined,
+      ArticleNumber: params.articleNumber ?? undefined,
+      Description: params.description ?? undefined,
+      PurchaseOrderFileToken: params.purchaseOrderFileToken ?? undefined,
     });
   }
 

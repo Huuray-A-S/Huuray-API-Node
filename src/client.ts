@@ -13,6 +13,7 @@ import { ExchangeRatesResource } from './resources/exchange-rates.js';
 import { OrdersResource, type SendRewardParams, type CreateOrderResult } from './resources/orders.js';
 import { StockResource } from './resources/stock.js';
 import { TemplatesResource } from './resources/templates.js';
+import { UploadsResource } from './resources/uploads.js';
 
 /** The production API. The spec declares no `servers` block, so this is set here. */
 export const DEFAULT_BASE_URL = 'https://api.huuray.com';
@@ -106,6 +107,7 @@ export class HuurayClient {
   readonly stock: StockResource;
   readonly exchangeRates: ExchangeRatesResource;
   readonly orders: OrdersResource;
+  readonly uploads: UploadsResource;
 
   readonly #apiToken: string;
   readonly #apiSecret: string;
@@ -251,6 +253,7 @@ export class HuurayClient {
     this.stock = new StockResource(this);
     this.exchangeRates = new ExchangeRatesResource(this);
     this.orders = new OrdersResource(this);
+    this.uploads = new UploadsResource(this);
   }
 
   /**
@@ -299,12 +302,14 @@ export class HuurayClient {
    * Resource methods use this because some v4 endpoints carry meaning in the
    * status itself — `206 Partial Content` on Cancel and Resend.
    *
+   * `form` is a `multipart/form-data` body, sent in place of `body`.
+   *
    * @internal Not part of the semver-stable surface; use {@link request}.
    */
   async send<T = unknown>(
     method: string,
     path: string,
-    options: SendOptions = {},
+    options: SendOptions & { form?: FormData } = {},
   ): Promise<RawResponse<T>> {
     // The method goes into the request line and the path is appended to the
     // base URL as text. A path not starting with "/" can move the request —
@@ -356,8 +361,12 @@ export class HuurayClient {
         'User-Agent': this.#userAgent,
       };
 
-      let payload: string | undefined;
-      if (options.body !== undefined) {
+      let payload: string | FormData | undefined;
+      if (options.form !== undefined) {
+        // No Content-Type here: fetch writes it with the boundary it uses, and
+        // a hand-set one would name a boundary the body does not have.
+        payload = options.form;
+      } else if (options.body !== undefined) {
         payload = JSON.stringify(options.body);
         headers['Content-Type'] = 'application/json';
       }

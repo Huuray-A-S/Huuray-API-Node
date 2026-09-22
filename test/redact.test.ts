@@ -46,6 +46,38 @@ describe('redaction', () => {
     expect(out).not.toContain('DEEP');
   });
 
+  it('masks a purchase order file name and customer reference, in either casing', () => {
+    const out = safeStringify({
+      FileName: 'purchase-order-jane-doe.pdf',
+      fileName: 'purchase-order-jane-doe.pdf',
+      CustomerReference: 'Jane Doe',
+      customerReference: 'Jane Doe',
+    });
+    expect(out).not.toContain('jane-doe');
+    expect(out).not.toContain('Jane Doe');
+    expect(redact({ FileName: 'purchase-order-jane-doe.pdf' })).toEqual({ FileName: 'pu***df' });
+  });
+
+  it.each([
+    ['a Uint8Array', new Uint8Array([77, 65, 82, 75])],
+    ['a Buffer', Buffer.from('MARK')],
+    ['an ArrayBuffer', new Uint8Array([77, 65, 82, 75]).buffer],
+    ['a DataView', new DataView(new Uint8Array([77, 65, 82, 75]).buffer)],
+    ['a Blob', new Blob(['MARK'])],
+  ])('prints %s as its size, never its bytes', (_, file) => {
+    expect(redact(file)).toBe('[4 bytes]');
+    expect(safeStringify({ nested: [{ file }] })).toBe('{"nested":[{"file":"[4 bytes]"}]}');
+  });
+
+  it('keeps upload arguments printable without the file or its name', () => {
+    const out = safeStringify({
+      file: Buffer.from('%PDF-1.7 MARK-c0ffee'),
+      fileName: 'purchase-order-jane-doe.pdf',
+      contentType: 'application/pdf',
+    });
+    expect(out).toBe('{"file":"[20 bytes]","fileName":"pu***df","contentType":"application/pdf"}');
+  });
+
   it('does not recurse forever on a cycle', () => {
     const cyclic: Record<string, unknown> = { name: 'x' };
     cyclic['self'] = cyclic;
