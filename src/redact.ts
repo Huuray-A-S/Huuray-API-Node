@@ -7,8 +7,20 @@
  * or attaches to an error goes through here first.
  */
 
-/** Response fields that carry redeemable value and are never logged. */
-export const SECRET_FIELDS = ['Code', 'CVV', 'RedeemLink', 'code', 'cvv', 'redeemLink'] as const;
+/**
+ * Response fields that carry redeemable value and are never logged. `Content`
+ * is a gift card PDF, which holds the code.
+ */
+export const SECRET_FIELDS = [
+  'Code',
+  'CVV',
+  'RedeemLink',
+  'Content',
+  'code',
+  'cvv',
+  'redeemLink',
+  'content',
+] as const;
 
 /**
  * Fields carrying credentials or personal data, masked in any diagnostic output.

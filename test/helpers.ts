@@ -53,6 +53,8 @@ export interface MockResponse {
   json?: unknown;
   /** Raw body text; takes precedence over `json`. Use to simulate garbled responses. */
   text?: string;
+  /** Response headers besides `Content-Type: application/json`, e.g. `Retry-After`. */
+  headers?: Record<string, string>;
   /** Throw instead of responding, to simulate a network failure before headers. */
   throws?: Error;
   /** Resolve the response, but make reading its body throw — a mid-body drop. */
@@ -211,7 +213,7 @@ export function recordingFetch(responses: MockResponse | MockResponse[] = {}) {
     const bodyText = mock.text ?? JSON.stringify(mock.json ?? { Status: status });
     const response = new Response(bodyText, {
       status,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...mock.headers },
     });
     if (mock.bodyThrows) {
       Object.defineProperty(response, 'text', {

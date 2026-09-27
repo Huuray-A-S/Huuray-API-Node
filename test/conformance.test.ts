@@ -366,6 +366,20 @@ async function exerciseEverything(): Promise<CapturedRequest[]> {
   await client.orders.resend({ orderUid: 'uid', voucherId: 7 });
   await client.orders.cancel({ orderUid: 'uid', voucherId: 7 });
 
+  await client.pdfs.get({
+    orderUid: 'uid',
+    voucherId: 7,
+    pdfTemplateUid: '00000000-0000-4000-8000-00000000c004',
+    combine: true,
+  });
+  await client.pdfs.getWhenReady({
+    orderUid: 'uid',
+    voucherId: 8,
+    pdfTemplateUid: '00000000-0000-4000-8000-00000000c005',
+    combine: false,
+    maxWaitMs: 0,
+  });
+
   return calls;
 }
 
@@ -407,8 +421,8 @@ describe('coverage gate', () => {
     expect(missing).toEqual([]);
   });
 
-  it('covers exactly the ten v4 operations — no more, no fewer', () => {
-    expect(specOperations().size).toBe(10);
+  it('covers exactly the eleven v4 operations — no more, no fewer', () => {
+    expect(specOperations().size).toBe(11);
   });
 });
 
@@ -470,6 +484,21 @@ describe('request-conformance gate', () => {
     );
   });
 
+  it('sees every PdfRequest field on both POST /v4/Pdf calls get and getWhenReady make', () => {
+    // exerciseEverything() must populate each of them, or the gate above never
+    // validates them against the spec.
+    const fields = ['OrderUID', 'VoucherID', 'PDFTemplateUid', 'Combine'];
+    const pdfs = calls.filter((c) => c.method === 'POST' && c.path === '/v4/Pdf');
+    expect(pdfs).toHaveLength(2);
+    for (const call of pdfs) {
+      expect(call.bodyKind).toBe('json');
+      expect(Object.keys(call.body as object).sort()).toEqual([...fields].sort());
+    }
+    expect(Object.keys(SPEC.components.schemas['PdfRequest']?.properties ?? {}).sort()).toEqual(
+      [...fields].sort(),
+    );
+  });
+
   it('sends no body to POST /v4/Template, which declares none', () => {
     const call = calls.find((c) => c.path === '/v4/Template');
     expect(call?.bodyOmitted).toBe(true);
@@ -491,6 +520,7 @@ describe('exerciseEverything stays mechanically linked to the public surface', (
     ExchangeRatesResource: ['get'],
     OrdersResource: ['cancel', 'create', 'createSync', 'resend', 'search', 'sendReward'],
     UploadsResource: ['create'],
+    PdfsResource: ['get', 'getWhenReady'],
   };
 
   it('every public resource method is on the exercised inventory', () => {
@@ -503,6 +533,7 @@ describe('exerciseEverything stays mechanically linked to the public surface', (
       client.exchangeRates,
       client.orders,
       client.uploads,
+      client.pdfs,
     ];
 
     const actual: Record<string, string[]> = {};
@@ -551,6 +582,28 @@ describe('the gates themselves work', () => {
       DeliveryPDFTemplateUid: 123,
     });
     expect(errors.join('\n')).toMatch(/DeliveryPDFTemplateUid.*expected string/);
+  });
+
+  it('flags a PdfRequest without its required OrderUID', () => {
+    const schema = SPEC.components.schemas['PdfRequest']!;
+    expect(validate(schema, { VoucherID: 7, Combine: true }).join('\n')).toMatch(
+      /OrderUID.*required/,
+    );
+    expect(validate(schema, { OrderUID: 'uid' })).toEqual([]);
+  });
+
+  it('flags a wrong type on each PdfRequest field', () => {
+    const schema = SPEC.components.schemas['PdfRequest']!;
+    const errors = validate(schema, {
+      OrderUID: 1,
+      VoucherID: '7',
+      PDFTemplateUid: 2,
+      Combine: 'yes',
+    }).join('\n');
+    expect(errors).toMatch(/OrderUID: expected string/);
+    expect(errors).toMatch(/VoucherID: expected integer/);
+    expect(errors).toMatch(/PDFTemplateUid: expected string/);
+    expect(errors).toMatch(/Combine: expected boolean/);
   });
 
   it('flags a wrong type', () => {

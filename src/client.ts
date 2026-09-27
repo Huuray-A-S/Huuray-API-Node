@@ -11,6 +11,7 @@ import { BalancesResource } from './resources/balances.js';
 import { CatalogueResource } from './resources/catalogue.js';
 import { ExchangeRatesResource } from './resources/exchange-rates.js';
 import { OrdersResource, type SendRewardParams, type CreateOrderResult } from './resources/orders.js';
+import { PdfsResource } from './resources/pdfs.js';
 import { StockResource } from './resources/stock.js';
 import { TemplatesResource } from './resources/templates.js';
 import { UploadsResource } from './resources/uploads.js';
@@ -69,10 +70,15 @@ export interface HuurayClientOptions {
   nonceFactory?: () => string;
 }
 
-/** A parsed response plus the HTTP status, which some endpoints use semantically. */
+/**
+ * A parsed response plus the HTTP status and headers, which some endpoints use
+ * semantically.
+ */
 export interface RawResponse<T> {
   data: T;
   httpStatus: number;
+  /** The response headers, e.g. `Retry-After` on a `202` from `POST /v4/Pdf`. */
+  headers: Headers;
 }
 
 export interface SendOptions {
@@ -82,7 +88,7 @@ export interface SendOptions {
   query?: Record<string, string | number | undefined>;
   /**
    * Whether repeating this call is safe. **Opt-in per operation** — never
-   * inferred from the HTTP method, because four read-only v4 endpoints are POSTs
+   * inferred from the HTTP method, because five read-only v4 endpoints are POSTs
    * and two value-moving ones are too. Default `false`.
    */
   retryable?: boolean;
@@ -108,6 +114,7 @@ export class HuurayClient {
   readonly exchangeRates: ExchangeRatesResource;
   readonly orders: OrdersResource;
   readonly uploads: UploadsResource;
+  readonly pdfs: PdfsResource;
 
   readonly #apiToken: string;
   readonly #apiSecret: string;
@@ -254,6 +261,7 @@ export class HuurayClient {
     this.exchangeRates = new ExchangeRatesResource(this);
     this.orders = new OrdersResource(this);
     this.uploads = new UploadsResource(this);
+    this.pdfs = new PdfsResource(this);
   }
 
   /**
@@ -297,19 +305,29 @@ export class HuurayClient {
   }
 
   /**
-   * Signs and sends one request, returning the parsed body and the HTTP status.
+   * Signs and sends one request, returning the parsed body, the HTTP status and
+   * the response headers.
    *
    * Resource methods use this because some v4 endpoints carry meaning in the
-   * status itself — `206 Partial Content` on Cancel and Resend.
+   * status itself — `206 Partial Content` on Cancel and Resend, `202 Accepted`
+   * with `Retry-After` on Pdf.
    *
    * `form` is a `multipart/form-data` body, sent in place of `body`.
+   *
+   * `checkBody` inspects a parsed 2xx body and returns why it cannot be used,
+   * or `undefined` when it can. An unusable body is handled like one that is
+   * not JSON: a {@link HuurayConnectionError}, retried when `retryable`. The
+   * reason must not quote the body.
    *
    * @internal Not part of the semver-stable surface; use {@link request}.
    */
   async send<T = unknown>(
     method: string,
     path: string,
-    options: SendOptions & { form?: FormData } = {},
+    options: SendOptions & {
+      form?: FormData;
+      checkBody?: (data: unknown) => string | undefined;
+    } = {},
   ): Promise<RawResponse<T>> {
     // The method goes into the request line and the path is appended to the
     // base URL as text. A path not starting with "/" can move the request —
@@ -420,10 +438,13 @@ export class HuurayClient {
         // a garbled response, and the documented reconciliation flow would
         // re-order. Body content is never included in the error: it could
         // hold voucher codes.
-        if (parsed === undefined) {
+        const unusable =
+          parsed === undefined
+            ? `the body was ${text ? 'not valid JSON' : 'empty'} (${text.length} bytes)`
+            : options.checkBody?.(parsed);
+        if (unusable !== undefined) {
           lastError = new HuurayConnectionError(
-            `${method} ${path} returned HTTP ${response.status} but the body was ` +
-              `${text ? 'not valid JSON' : 'empty'} (${text.length} bytes). ` +
+            `${method} ${path} returned HTTP ${response.status} but ${unusable}. ` +
               'Treat the outcome as unknown rather than empty.',
             method,
             path,
@@ -431,7 +452,7 @@ export class HuurayClient {
           if (attempt < attempts) continue;
           throw lastError;
         }
-        return { data: parsed as T, httpStatus: response.status };
+        return { data: parsed as T, httpStatus: response.status, headers: response.headers };
       }
 
       lastError = HuurayApiError.from(response.status, parsed, method, path);

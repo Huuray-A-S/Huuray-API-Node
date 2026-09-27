@@ -78,6 +78,19 @@ describe('redaction', () => {
     expect(out).toBe('{"file":"[20 bytes]","fileName":"pu***df","contentType":"application/pdf"}');
   });
 
+  it('removes a gift card PDF, base64 or decoded, in either casing — it holds the code', () => {
+    const out = safeStringify({
+      Documents: [{ VoucherIDs: [1], Content: 'JVBERi0xLjcgTUFSSy1jMGRl' }],
+      documents: [{ voucherIds: [1], content: Buffer.from('%PDF-1.7 MARK-c0de') }],
+    });
+    expect(out).not.toContain('JVBERi0xLjcgTUFSSy1jMGRl');
+    expect(out).not.toContain('bytes');
+    expect(out).toBe(
+      '{"Documents":[{"VoucherIDs":[1],"Content":"[redacted: bearer value]"}],' +
+        '"documents":[{"voucherIds":[1],"content":"[redacted: bearer value]"}]}',
+    );
+  });
+
   it('does not recurse forever on a cycle', () => {
     const cyclic: Record<string, unknown> = { name: 'x' };
     cyclic['self'] = cyclic;
