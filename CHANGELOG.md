@@ -27,8 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   10 minutes) it throws `HuurayTimeoutError` with `timeoutMs` set to `maxWaitMs`,
   saying it gave up waiting within `maxWaitMs` — not that it timed out after it —
   and giving the API's last status message. `HuurayTimeoutError` takes an optional
-  `lead` that replaces its opening sentence for this. A `maxWaitMs` outside 0 to
-  2147483647 throws a `RangeError` before sending.
+  `lead` that replaces its opening sentence for this. Any `2xx` other than `200` is
+  treated like a `202` (not ready); any non-`2xx` ends the wait with an exception.
+  A `maxWaitMs` outside 0 to 2147483647 throws a `RangeError` before sending.
 - **A `2xx` whose document `Content` is missing or not valid base64 throws
   `HuurayConnectionError`**, like an unparseable body, and is retried as a read.
   The message gives the content's length, never the content.
@@ -36,7 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fields `redact()` removes, so an error body never carries one, and
   `console.log()`, `util.inspect()` and `JSON.stringify()` show a document's
   `content` as `[N bytes]`. The PDF holds the redeemable code.
-- **`RawResponse` carries the response `headers`.**
+- **`RawResponse` has a new required field, `headers`**, the response headers.
+  Code that builds a `RawResponse` itself, such as a mocked `send()`, must add it.
 - **The conformance gates cover `POST /v4/Pdf`**, with every `PdfRequest` field
   populated; the operation count goes from 10 to 11. The test fetch can answer with
   response headers.

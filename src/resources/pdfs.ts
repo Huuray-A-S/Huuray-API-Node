@@ -78,9 +78,11 @@ export interface PdfDocument {
 export interface PdfResult {
   /**
    * `true` when the API answered `200` with the documents. `false` when it
-   * answered `202`: the order is still being processed, or a supplier has not
-   * delivered a code yet. Ask again after `retryAfter` seconds, or 30 when it
-   * is `null`.
+   * answered `202`, or any other 2xx: the order is still being processed, or a
+   * supplier has not delivered a code yet. Ask again after `retryAfter` seconds,
+   * or 30 when it is `null`. A `200` with no documents is still `ready`, with an
+   * empty list, though Huuray's API never sends one: every case without
+   * vouchers is a `404`.
    */
   ready: boolean;
   orderUid: string | null;
@@ -125,7 +127,10 @@ const DECODED = new WeakMap<WirePdfDocument, Uint8Array>();
 export class PdfsResource extends Resource {
   readonly #clock: PollClock;
 
-  /** @param clock Replaced by the test suite, so polling is tested without waiting. */
+  /**
+   * @param clock Replaced by the test suite, so polling is tested without waiting.
+   * @internal `clock` is not part of the semver-stable surface; use `client.pdfs`.
+   */
   constructor(client: HuurayClient, clock: PollClock = SYSTEM_CLOCK) {
     super(client);
     this.#clock = clock;
@@ -157,7 +162,9 @@ export class PdfsResource extends Resource {
    *
    * Throws {@link HuurayTimeoutError}, with the API's last status message, when
    * the next wait would pass `maxWaitMs`. Each attempt is a new signed
-   * request; any other error is thrown as {@link get} throws it.
+   * request. Any 2xx other than `200` is treated like a `202` (not ready); any
+   * non-2xx ends the wait with an exception, thrown as {@link get} throws it,
+   * as is any other error.
    */
   async getWhenReady(params: GetPdfWhenReadyParams): Promise<PdfResult> {
     const maxWaitMs = params.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
