@@ -274,6 +274,17 @@ describe('pdfs.get() result', () => {
     });
   });
 
+  it('keeps a 200 with no documents ready, with an empty list', async () => {
+    // Huuray's API answers 404 instead; the client does not second-guess a 200.
+    const { client } = testClient({ status: 200, json: OK([]) });
+    await expect(client.pdfs.get({ orderUid: ORDER })).resolves.toEqual({
+      ready: true,
+      orderUid: ORDER,
+      documents: [],
+      retryAfter: null,
+    });
+  });
+
   it('maps a 202 as not ready, with Retry-After in seconds — not thrown, and not success', async () => {
     const { client } = testClient(notReady('30'));
     await expect(client.pdfs.get({ orderUid: ORDER })).resolves.toEqual({
@@ -543,6 +554,23 @@ describe('pdfs.getWhenReady()', () => {
     expect((err as Error).message).toMatch(/Waiting another 120 seconds would pass maxWaitMs\.$/);
     expect(calls).toHaveLength(1);
     expect(waits).toEqual([]);
+  });
+
+  it('gives up at once, without sleeping, on the largest Retry-After it reads', async () => {
+    const { pdfs, calls, waits } = pdfClient([notReady(String(Number.MAX_SAFE_INTEGER))]);
+    const err = await caught(() => pdfs.getWhenReady({ orderUid: ORDER }));
+    expect(err).toBeInstanceOf(HuurayTimeoutError);
+    expect(err).toMatchObject({ timeoutMs: 600_000 });
+    expect(calls).toHaveLength(1);
+    expect(waits).toEqual([]);
+  });
+
+  it.each([201, 206])('treats a %i like a 202: not ready, so it asks again', async (status) => {
+    const other: MockResponse = { status, json: { OrderUID: ORDER, Documents: [], Status: status } };
+    const { pdfs, calls, waits } = pdfClient([other, READY]);
+    await expect(pdfs.getWhenReady({ orderUid: ORDER })).resolves.toMatchObject({ ready: true });
+    expect(waits).toEqual([30_000]);
+    expect(calls).toHaveLength(2);
   });
 
   it('asks exactly once with maxWaitMs 0', async () => {
