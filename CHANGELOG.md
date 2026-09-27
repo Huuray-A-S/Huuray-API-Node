@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Gift card PDFs — built against a predicted specification.** `POST /v4/Pdf` is
+  not deployed yet; `openapi/huuray-v4.json` is derived from the unreleased API
+  branch and must be replaced by the published specification before release.
+- **`pdfs.get({ orderUid, voucherId, pdfTemplateUid, combine })`** — `POST /v4/Pdf`.
+  Returns a `PdfResult`: `ready`, `orderUid`, `documents` and `retryAfter`. Each
+  `PdfDocument` has `voucherIds`, `pdfTemplateUid`, `fileName`, `contentType` and
+  `content`, the PDF decoded from base64 to a `Uint8Array`. A `202` is returned as
+  `ready: false` with no documents, and `retryAfter` is the `Retry-After` header in
+  whole seconds, or `null`. The optional fields are omitted when not given or
+  `null`; the client checks none of them, the API does. A read: retried on
+  connection failures and 5xx like the others, never
+  `HuurayIndeterminateOrderError`.
+- **`pdfs.getWhenReady({ …, maxWaitMs })`** asks again while the API answers
+  `202`, waiting `retryAfter` seconds (30 when there is none), each time as a new
+  signed request. When the next wait would pass `maxWaitMs` (default 10 minutes)
+  it throws `HuurayTimeoutError` with the API's last status message. A `maxWaitMs`
+  outside 0 to 2147483647 throws a `RangeError` before sending.
+- **A `2xx` whose document `Content` is missing or not valid base64 throws
+  `HuurayConnectionError`**, like an unparseable body, and is retried as a read.
+  The message gives the content's length, never the content.
+- **A gift card PDF is never printed.** `Content` and `content` join the bearer
+  fields `redact()` removes, so an error body never carries one, and
+  `console.log()`, `util.inspect()` and `JSON.stringify()` show a document's
+  `content` as `[N bytes]`. The PDF holds the redeemable code.
+- **`RawResponse` carries the response `headers`.**
+- **The conformance gates cover `POST /v4/Pdf`**, with every `PdfRequest` field
+  populated; the operation count goes from 10 to 11. The test fetch can answer with
+  response headers.
 - **Purchase order files and references on orders — built against a predicted
   specification.** The API change is not deployed yet; `openapi/huuray-v4.json`
   is derived from the unreleased API branch and must be replaced by the published

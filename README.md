@@ -143,6 +143,24 @@ await huuray.orders.create({
 
 The token is consumed by the order it is used with. **Uploads are never retried automatically:** each one is stored as a pending upload until an order uses its token or the upload is cleaned up, the API allows at most 5 of those per account, and there is no way to look one up. A timeout or dropped connection throws `HuurayTimeoutError` or `HuurayConnectionError`, and the upload may still have been stored.
 
+## Fetching a gift card PDF
+
+`pdfs.get()` returns the gift card PDFs of an order you placed: one per voucher, only the one for `voucherId`, or a single combined PDF with `combine: true`. Without `pdfTemplateUid` you get the PDF the order's delivery email was sent with.
+
+```ts
+const huuray = new HuurayClient({ apiToken, apiSecret, timeoutMs: 100_000 });   // PDFs can be large
+
+const pdf = await huuray.pdfs.getWhenReady({ orderUid });   // asks again while the order is processing
+
+for (const doc of pdf.documents) {
+  await handToTheOrderer(doc.fileName, doc.content);   // your code; content is the PDF as bytes
+}
+```
+
+A `202` means the order is still being processed, or a supplier has not delivered a code yet. `get()` returns it as `ready: false`, with no documents and `retryAfter` in seconds — never as success. `getWhenReady()` waits `retryAfter` (30 seconds when the API sends none) and asks again, up to `maxWaitMs` (default 10 minutes), then throws `HuurayTimeoutError` with the API's last status message.
+
+**The PDF is a bearer instrument:** it holds the redeemable code, so whoever has the file can use the gift card. Never log it, and keep it no longer than you need it; `console.log()` and `JSON.stringify()` print it as `[N bytes]`, and `redact()` removes it. The API token needs the **Search** permission, and the API serves PDFs only for orders with at most 3 receivers — a larger order gets a 422, which this client leaves to the API. A PDF can be several MB, so allow a longer `timeoutMs` than the default: Huuray suggests 100 seconds.
+
 ## Seven things worth knowing
 
 These are the parts of the API that are easy to get wrong. The client handles each one, but the behaviour is worth understanding.
@@ -266,7 +284,7 @@ new HuurayClient({ apiToken, apiSecret, hashEncoding: 'base64' });
 
 ## API coverage
 
-All ten v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
+All eleven v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
 
 | Method | Endpoint |
 |---|---|
@@ -282,6 +300,8 @@ All ten v4 operations, and nothing else. Every method maps to one operation in t
 | `orders.resend(…)` | `POST /v4/Resend` |
 | `orders.cancel(…)` | `DELETE /v4/Cancel` |
 | `uploads.create({ file, fileName, contentType })` | `POST /v4/Upload` |
+| `pdfs.get({ orderUid, voucherId, pdfTemplateUid, combine })` | `POST /v4/Pdf` |
+| `pdfs.getWhenReady(…)` | `POST /v4/Pdf`, again while it answers `202` |
 
 Need something not covered? `request()` signs any call for you:
 
@@ -299,7 +319,7 @@ Every error class below extends `HuurayError`. Input checks on arguments throw a
 |---|---|
 | `HuurayConfigError` | missing or invalid client options |
 | `HuurayConnectionError` | the request never reached the API |
-| `HuurayTimeoutError` | the request exceeded `timeoutMs` |
+| `HuurayTimeoutError` | the request exceeded `timeoutMs`, or `pdfs.getWhenReady()` would wait past `maxWaitMs` |
 | `HuurayAuthError` | 401 or 403 — see *Authentication* above |
 | `HuurayNotFoundError` | 404 |
 | `HuurayValidationError` | 422 |
