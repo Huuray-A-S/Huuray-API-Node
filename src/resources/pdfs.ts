@@ -116,6 +116,12 @@ interface WirePdfResponse {
   StatusMessage?: string | null;
 }
 
+/**
+ * Each wire document's bytes, decoded once by {@link unusableContent} when it
+ * checks the body, and read back when the result is built.
+ */
+const DECODED = new WeakMap<WirePdfDocument, Uint8Array>();
+
 export class PdfsResource extends Resource {
   readonly #clock: PollClock;
 
@@ -205,10 +211,9 @@ export class PdfsResource extends Resource {
       result: {
         ready: httpStatus === 200,
         orderUid: data?.OrderUID ?? null,
-        // checkBody has vouched for every Content.
-        documents: (data?.Documents ?? []).map(
-          (d) => new PrintSafeDocument(d, decodeBase64(d.Content!)!),
-        ),
+        // send() runs checkBody on every 2xx body it returns, which decoded
+        // every Content.
+        documents: (data?.Documents ?? []).map((d) => new PrintSafeDocument(d, DECODED.get(d)!)),
         retryAfter: parseRetryAfter(headers.get('Retry-After')),
       },
       statusMessage: data?.StatusMessage ?? data?.Message ?? undefined,
@@ -251,19 +256,21 @@ class PrintSafeDocument implements PdfDocument {
 }
 
 /**
- * Why a 2xx body's documents cannot be used, or `undefined` when they can.
- * Names the document and the length of its content, never the content.
+ * Why a 2xx body's documents cannot be used, or `undefined` when they can, in
+ * which case each document's bytes are in {@link DECODED}. Names the document
+ * and the length of its content, never the content.
  */
 function unusableContent(data: unknown): string | undefined {
   const documents = (data as WirePdfResponse | null)?.Documents;
   if (documents == null) return undefined;
   if (!Array.isArray(documents)) return 'Documents was not a list';
-  for (const [i, document] of documents.entries()) {
-    const content = (document as WirePdfDocument | null)?.Content;
-    if (typeof content !== 'string') return `Documents[${i}].Content was missing`;
-    if (decodeBase64(content) === undefined) {
-      return `Documents[${i}].Content was not valid base64 (${content.length} characters)`;
+  for (const [i, document] of (documents as (WirePdfDocument | null)[]).entries()) {
+    if (typeof document?.Content !== 'string') return `Documents[${i}].Content was missing`;
+    const bytes = decodeBase64(document.Content);
+    if (bytes === undefined) {
+      return `Documents[${i}].Content was not valid base64 (${document.Content.length} characters)`;
     }
+    DECODED.set(document, bytes);
   }
   return undefined;
 }

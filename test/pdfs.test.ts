@@ -1,5 +1,5 @@
 import { format, inspect } from 'node:util';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   HuurayApiError,
   HuurayAuthError,
@@ -207,6 +207,18 @@ describe('pdfs.get() result', () => {
     const content = result.documents[0]!.content;
     expect(content).toBeInstanceOf(Uint8Array);
     expect([...content]).toEqual([...EVERY_BYTE]);
+  });
+
+  it('decodes each document once', async () => {
+    const { client } = testClient(READY);
+    const write = vi.spyOn(Buffer.prototype, 'write');
+    try {
+      await client.pdfs.get({ orderUid: ORDER });
+      const decodes = write.mock.calls.filter((args) => (args as unknown[])[1] === 'base64');
+      expect(decodes).toHaveLength(2);
+    } finally {
+      write.mockRestore();
+    }
   });
 
   it('maps a combined document: several VoucherIDs and a null PDFTemplateUid', async () => {
