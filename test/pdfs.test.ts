@@ -466,6 +466,7 @@ describe('pdfs.getWhenReady()', () => {
     const { pdfs, calls, waits } = pdfClient([notReady('0'), notReady('0')]);
     const err = await caught(() => pdfs.getWhenReady({ orderUid: ORDER, maxWaitMs: 1_500 }));
     expect(err).toBeInstanceOf(HuurayTimeoutError);
+    expect((err as Error).message).toMatch(/Waiting another 1 second would pass maxWaitMs\.$/);
     expect(waits).toEqual([1000]);
     expect(calls).toHaveLength(2);
   });
@@ -489,8 +490,10 @@ describe('pdfs.getWhenReady()', () => {
     expect(err).toBeInstanceOf(HuurayTimeoutError);
     expect(err).not.toBeInstanceOf(HuurayIndeterminateOrderError);
     expect(err).toMatchObject({ method: 'POST', path: '/v4/Pdf', timeoutMs: 50_000 });
+    // It says it gave up within maxWaitMs: only 30 of the 50 seconds have passed.
     expect((err as Error).message).toBe(
-      `POST /v4/Pdf timed out after 50000ms. The gift card PDF was not ready: ${NOT_READY_TEXT}. ` +
+      'POST /v4/Pdf gave up waiting for the gift card PDF within maxWaitMs (50000 ms). ' +
+        `The gift card PDF was not ready: ${NOT_READY_TEXT}. ` +
         'Waiting another 30 seconds would pass maxWaitMs.',
     );
   });
@@ -542,8 +545,8 @@ describe('pdfs.getWhenReady()', () => {
     const { pdfs } = pdfClient([{ status: 202, json: { Status: 202, Documents: [] } }]);
     const err = await caught(() => pdfs.getWhenReady({ orderUid: ORDER, maxWaitMs: 0 }));
     expect((err as Error).message).toBe(
-      'POST /v4/Pdf timed out after 0ms. The gift card PDF was not ready. ' +
-        'Waiting another 30 seconds would pass maxWaitMs.',
+      'POST /v4/Pdf gave up waiting for the gift card PDF within maxWaitMs (0 ms). ' +
+        'The gift card PDF was not ready. Waiting another 30 seconds would pass maxWaitMs.',
     );
   });
 

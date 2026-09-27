@@ -38,13 +38,26 @@ export class HuurayConnectionError extends HuurayError {
   }
 }
 
-/** The request exceeded the configured timeout. */
+/**
+ * The request exceeded the configured timeout, or `pdfs.getWhenReady()` gave up
+ * at `maxWaitMs`.
+ */
 export class HuurayTimeoutError extends HuurayConnectionError {
   override readonly name = 'HuurayTimeoutError';
-  /** @param note Appended to the message, e.g. what the timeout may have left behind. */
-  constructor(method: string, path: string, readonly timeoutMs: number, note?: string) {
+  /**
+   * @param note Appended to the message, e.g. what the timeout may have left behind.
+   * @param lead Replaces the opening "… timed out after Nms.", for a wait that
+   *   was given up before `timeoutMs` had passed.
+   */
+  constructor(
+    method: string,
+    path: string,
+    readonly timeoutMs: number,
+    note?: string,
+    lead?: string,
+  ) {
     super(
-      `${method} ${path} timed out after ${timeoutMs}ms.${note ? ` ${note}` : ''}`,
+      `${lead ?? `${method} ${path} timed out after ${timeoutMs}ms.`}${note ? ` ${note}` : ''}`,
       method,
       path,
     );

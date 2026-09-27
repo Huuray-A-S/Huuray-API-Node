@@ -171,12 +171,16 @@ export class PdfsResource extends Resource {
         Math.max(result.retryAfter ?? DEFAULT_RETRY_AFTER_SECONDS, MIN_RETRY_AFTER_SECONDS) * 1000;
       if (this.#clock.now() + waitMs > deadline) {
         const last = statusMessage ? `: ${statusMessage.replace(/\.?$/, '.')}` : '.';
+        const seconds = waitMs / 1000;
+        // Less than maxWaitMs may have passed, so the message does not say it
+        // timed out after it.
         throw new HuurayTimeoutError(
           'POST',
           PATH,
           maxWaitMs,
-          `The gift card PDF was not ready${last} Waiting another ${waitMs / 1000} seconds ` +
-            'would pass maxWaitMs.',
+          `The gift card PDF was not ready${last} Waiting another ${seconds} ` +
+            `${seconds === 1 ? 'second' : 'seconds'} would pass maxWaitMs.`,
+          `POST ${PATH} gave up waiting for the gift card PDF within maxWaitMs (${maxWaitMs} ms).`,
         );
       }
       await this.#clock.sleep(waitMs);

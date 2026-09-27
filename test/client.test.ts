@@ -413,8 +413,14 @@ describe('transport faults on the response body', () => {
 
   it('maps a mid-body timeout to HuurayTimeoutError', async () => {
     const abort = new DOMException('The operation timed out.', 'TimeoutError');
-    const { client } = testClient({ bodyThrows: abort });
-    await expect(client.balances.list()).rejects.toBeInstanceOf(HuurayTimeoutError);
+    const { client } = testClient({ bodyThrows: abort }, { timeoutMs: 1234 });
+    const err: unknown = await client.balances.list().then(
+      () => { throw new Error('must reject'); },
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(HuurayTimeoutError);
+    expect(err).toMatchObject({ timeoutMs: 1234 });
+    expect((err as Error).message).toBe('GET /v4/Balance timed out after 1234ms.');
   });
 
   it('treats a garbled 200 body as a transport fault, never as an empty result', async () => {
