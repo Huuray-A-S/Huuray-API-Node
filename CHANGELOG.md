@@ -22,8 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   connection failures and 5xx like the others, never
   `HuurayIndeterminateOrderError`.
 - **`pdfs.getWhenReady({ …, maxWaitMs })`** asks again while the API answers
-  `202`, waiting `retryAfter` seconds (30 when there is none), each time as a new
-  signed request. When the next wait would pass `maxWaitMs` (default 10 minutes)
+  `202`, waiting `retryAfter` seconds (30 when there is none, and at least 1), each
+  time as a new signed request. When the next wait would pass `maxWaitMs` (default 10 minutes)
   it throws `HuurayTimeoutError` with the API's last status message. A `maxWaitMs`
   outside 0 to 2147483647 throws a `RangeError` before sending.
 - **A `2xx` whose document `Content` is missing or not valid base64 throws

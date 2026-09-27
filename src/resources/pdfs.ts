@@ -13,6 +13,12 @@ const DEFAULT_MAX_WAIT_MS = 600_000;
 const DEFAULT_RETRY_AFTER_SECONDS = 30;
 
 /**
+ * The shortest wait between two attempts, in seconds, whatever `Retry-After`
+ * says: a `0` would otherwise send signed requests back to back.
+ */
+const MIN_RETRY_AFTER_SECONDS = 1;
+
+/**
  * The longest `maxWaitMs`: a timer holds a signed 32-bit delay, and no single
  * wait is ever longer than `maxWaitMs`.
  */
@@ -140,7 +146,8 @@ export class PdfsResource extends Resource {
 
   /**
    * {@link get}, asked again for as long as the API answers `202`, waiting the
-   * `Retry-After` seconds between attempts (30 when it sends none).
+   * `Retry-After` seconds between attempts (30 when it sends none, and at least
+   * 1).
    *
    * Throws {@link HuurayTimeoutError}, with the API's last status message, when
    * the next wait would pass `maxWaitMs`. Each attempt is a new signed
@@ -160,7 +167,8 @@ export class PdfsResource extends Resource {
       const { result, statusMessage } = await this.#send(params);
       if (result.ready) return result;
 
-      const waitMs = (result.retryAfter ?? DEFAULT_RETRY_AFTER_SECONDS) * 1000;
+      const waitMs =
+        Math.max(result.retryAfter ?? DEFAULT_RETRY_AFTER_SECONDS, MIN_RETRY_AFTER_SECONDS) * 1000;
       if (this.#clock.now() + waitMs > deadline) {
         const last = statusMessage ? `: ${statusMessage.replace(/\.?$/, '.')}` : '.';
         throw new HuurayTimeoutError(

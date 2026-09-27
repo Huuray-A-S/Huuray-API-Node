@@ -455,11 +455,19 @@ describe('pdfs.getWhenReady()', () => {
     }
   });
 
-  it('honours each Retry-After in turn', async () => {
+  it('honours each Retry-After in turn, but waits at least 1 second', async () => {
     const { pdfs, calls, waits } = pdfClient([notReady('3'), notReady('7'), notReady('0'), READY]);
     await expect(pdfs.getWhenReady({ orderUid: ORDER })).resolves.toMatchObject({ ready: true });
-    expect(waits).toEqual([3000, 7000, 0]);
+    expect(waits).toEqual([3000, 7000, 1000]);
     expect(calls).toHaveLength(4);
+  });
+
+  it('gives up when the 1-second wait after a Retry-After of 0 would pass maxWaitMs', async () => {
+    const { pdfs, calls, waits } = pdfClient([notReady('0'), notReady('0')]);
+    const err = await caught(() => pdfs.getWhenReady({ orderUid: ORDER, maxWaitMs: 1_500 }));
+    expect(err).toBeInstanceOf(HuurayTimeoutError);
+    expect(waits).toEqual([1000]);
+    expect(calls).toHaveLength(2);
   });
 
   it.each([
@@ -575,11 +583,14 @@ describe('pdfs.getWhenReady()', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('is on the client, waiting with a real timer', async () => {
+  it('is on the client, waiting at least 1 second with a real timer', async () => {
     const { client, calls } = testClient([notReady('0'), READY]);
+    const start = performance.now();
     await expect(client.pdfs.getWhenReady({ orderUid: ORDER })).resolves.toMatchObject({
       ready: true,
     });
+    // A timer may fire a little before the clock reads the full second.
+    expect(performance.now() - start).toBeGreaterThanOrEqual(950);
     expect(calls).toHaveLength(2);
   });
 });
