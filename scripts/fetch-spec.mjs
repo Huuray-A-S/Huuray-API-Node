@@ -2,8 +2,8 @@
  * Re-downloads the live v4 spec over the vendored copy.
  *
  * Run by .github/workflows/spec-drift.yml on a schedule. If the download differs
- * from the committed copy, the workflow regenerates types and opens a PR — that
- * PR is the early warning that the API changed under us.
+ * from the committed copy, the workflow runs the suite against it and opens an
+ * issue: that issue is the early warning that the API changed under us.
  *
  * Exits 0 whether or not anything changed; the workflow diffs the working tree.
  */

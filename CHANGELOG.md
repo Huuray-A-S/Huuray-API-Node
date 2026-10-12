@@ -167,8 +167,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changelog no longer present HTTP 404 as how the API signals every empty result:
   it was observed on `POST /v4/Template` when the account had no templates, while
   an account with only PDF templates gets an empty `templates` list. CONTRIBUTING
-  and the spec-drift workflow no longer say a changed specification always opens a
-  pull request: without a `SPEC_DRIFT_TOKEN` secret the run fails instead. The
+  and the spec-drift workflow say what the job does: a changed specification opens
+  an issue with the diff, not a pull request. The
   README *Errors* section and `HuurayError` no longer say that every error extends
   it: input checks on arguments throw a built-in `TypeError` or `RangeError`
   before the request they check is sent.
