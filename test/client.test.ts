@@ -448,6 +448,8 @@ describe('error mapping', () => {
       apiToken: 't',
       apiSecret: 's',
       fetch: (async () => response) as unknown as typeof globalThis.fetch,
+      // A read is retried on a 503: once here, with no backoff to sit through.
+      retry: { maxRetries: 1, baseDelayMs: 0 },
     });
     expect(await caught(() => client.balances.list())).toBeInstanceOf(type);
   });
@@ -461,6 +463,8 @@ describe('error mapping', () => {
       apiToken: 't',
       apiSecret: 's',
       fetch: (async () => response) as unknown as typeof globalThis.fetch,
+      // Retried once too, with no backoff to sit through.
+      retry: { maxRetries: 1, baseDelayMs: 0 },
     });
     const err = await caught(() => client.balances.list());
     expect(err).toBeInstanceOf(HuurayRateLimitError);
