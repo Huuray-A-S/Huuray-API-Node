@@ -37,6 +37,7 @@ export {
   HuurayAuthError,
   HuurayNotFoundError,
   HuurayValidationError,
+  HuurayRateLimitError,
   HuurayServerError,
   HuurayIndeterminateOrderError,
 } from './errors.js';

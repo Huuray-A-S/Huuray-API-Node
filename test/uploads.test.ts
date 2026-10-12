@@ -4,6 +4,7 @@ import {
   HuurayApiError,
   HuurayConnectionError,
   HuurayIndeterminateOrderError,
+  HuurayRateLimitError,
   HuurayServerError,
   HuurayTimeoutError,
   HuurayValidationError,
@@ -188,6 +189,18 @@ describe('uploads.create() is never retried', () => {
     const err = await caught(() => client.uploads.create(upload));
     expect(err).toBeInstanceOf(HuurayServerError);
     expect(err).not.toBeInstanceOf(HuurayIndeterminateOrderError);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('makes one attempt on a 429, which was not processed: nothing may be stored', async () => {
+    const { client, calls } = testClient(
+      [{ status: 429, json: { Status: 429 }, headers: { 'Retry-After': '3' } }],
+      RETRIES,
+    );
+    const err = await caught(() => client.uploads.create(upload));
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(err).toMatchObject({ httpStatus: 429, retryAfter: 3, path: '/v4/Upload' });
+    expect((err as Error).message).toBe('POST /v4/Upload failed with HTTP 429');
     expect(calls).toHaveLength(1);
   });
 

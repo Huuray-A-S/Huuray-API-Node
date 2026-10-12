@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   HuurayIndeterminateOrderError,
+  HuurayRateLimitError,
   SYNC_QUANTITY_LIMIT,
   type CreateOrderParams,
   type HuurayApiError,
@@ -508,6 +509,25 @@ describe('indeterminate orders', () => {
       message: expect.stringMatching(/No RefID was sent/),
     });
   });
+
+  it.each(['create', 'createSync'] as const)(
+    '%s() does NOT mask a 429: the request was not processed, so it is not indeterminate',
+    async (method) => {
+      const { client, calls } = testClient(
+        [{ status: 429, json: { Status: 429 }, headers: { 'Retry-After': '2' } }],
+        { retry: { maxRetries: 3, baseDelayMs: 1 } },
+      );
+      const err: unknown = await client.orders[method]({ ...base, refId: 'ref-9' }).then(
+        () => expect.unreachable('order must reject on 429'),
+        (e: unknown) => e,
+      );
+      expect(err).toBeInstanceOf(HuurayRateLimitError);
+      expect(err).not.toBeInstanceOf(HuurayIndeterminateOrderError);
+      expect(err).toMatchObject({ httpStatus: 429, retryAfter: 2, path: '/v4/Order' });
+      // Never repeated automatically: the strict queue holds one response.
+      expect(calls).toHaveLength(1);
+    },
+  );
 
   it('does NOT mask a 422 — that order was definitively rejected', async () => {
     const { client } = testClient({ status: 422, json: { Status: 422, StatusMessage: 'bad' } });

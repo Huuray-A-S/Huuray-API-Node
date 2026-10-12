@@ -1,7 +1,7 @@
 import { inspect } from 'node:util';
 import type { HuurayClient } from '../client.js';
 import { HuurayTimeoutError } from '../errors.js';
-import { sleep } from '../retry.js';
+import { MIN_RETRY_AFTER_SECONDS, parseRetryAfter, sleep } from '../retry.js';
 import { Resource, compact } from './base.js';
 
 const PATH = '/v4/Pdf';
@@ -11,12 +11,6 @@ const DEFAULT_MAX_WAIT_MS = 600_000;
 
 /** The wait after a `202` that carries no usable `Retry-After`, in seconds. */
 const DEFAULT_RETRY_AFTER_SECONDS = 30;
-
-/**
- * The shortest wait between two attempts, in seconds, whatever `Retry-After`
- * says: a `0` would otherwise send signed requests back to back.
- */
-const MIN_RETRY_AFTER_SECONDS = 1;
 
 /**
  * The longest `maxWaitMs`: a timer holds a signed 32-bit delay, and no single
@@ -149,7 +143,7 @@ export class PdfsResource extends Resource {
    * orders with at most 3 receivers (a `422` otherwise).
    *
    * A read, despite being a POST: it never changes the order, and is retried
-   * on connection failures and 5xx like the other reads.
+   * on connection failures, 5xx and `429` like the other reads.
    */
   async get(params: GetPdfParams): Promise<PdfResult> {
     return (await this.#send(params)).result;
@@ -164,7 +158,8 @@ export class PdfsResource extends Resource {
    * the next wait would pass `maxWaitMs`. Each attempt is a new signed
    * request. Any 2xx other than `200` is treated like a `202` (not ready); any
    * non-2xx ends the wait with an exception, thrown as {@link get} throws it,
-   * as is any other error.
+   * as is any other error. That includes a `429` once {@link get} has used up
+   * its retries: it is thrown as `HuurayRateLimitError`, not waited out here.
    */
   async getWhenReady(params: GetPdfWhenReadyParams): Promise<PdfResult> {
     const maxWaitMs = params.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
@@ -297,11 +292,4 @@ function decodeBase64(s: string): Uint8Array | undefined {
   // so fewer bytes come out than the length promises.
   const written = Buffer.from(bytes.buffer).write(s, 'base64');
   return written === bytes.length ? bytes : undefined;
-}
-
-/** Whole seconds from a `Retry-After` header, or `null`. An HTTP date is not read. */
-function parseRetryAfter(value: string | null): number | null {
-  if (value === null || !/^\d+$/.test(value.trim())) return null;
-  const seconds = Number(value.trim());
-  return Number.isSafeInteger(seconds) ? seconds : null;
 }

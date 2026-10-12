@@ -22,7 +22,10 @@ export interface RetryOptions {
   maxRetries?: number;
   /** Base delay in ms; doubles per attempt with jitter. Default `250`. */
   baseDelayMs?: number;
-  /** Ceiling for a single backoff wait. Default `4000`. */
+  /**
+   * Ceiling for a single backoff wait, and the longest `Retry-After` a read
+   * waits after a `429`: a longer one is thrown at once. Default `4000`.
+   */
   maxDelayMs?: number;
 }
 
@@ -39,12 +42,43 @@ const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
  * Whether a response status should be retried, given the operation is already
  * known to be safe to repeat.
  *
- * `429` is included defensively: it is not a documented response on any v4
- * endpoint, so this client never assumes rate limiting exists — but if one
- * appears, backing off is strictly better than hammering.
+ * `429` is a documented response on every v4 operation: the rate limit for the
+ * caller's IP address was exceeded and the request was not processed. A read is
+ * repeated after the `Retry-After` seconds when the header gives them, see
+ * {@link retryAfterDelay}, and after the computed backoff when it does not.
  */
 export function isRetryableStatus(status: number): boolean {
   return RETRYABLE_STATUS.has(status);
+}
+
+/**
+ * The shortest wait a `Retry-After` is honoured with, in seconds, whatever the
+ * header says: a `0` would otherwise send signed requests back to back.
+ */
+export const MIN_RETRY_AFTER_SECONDS = 1;
+
+/** Whole seconds from a `Retry-After` header, or `null`. An HTTP date is not read. */
+export function parseRetryAfter(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value.trim())) return null;
+  const seconds = Number(value.trim());
+  return Number.isSafeInteger(seconds) ? seconds : null;
+}
+
+/** The longest delay a timer holds, in ms: a signed 32-bit value. */
+const MAX_TIMER_MS = 2_147_483_647;
+
+/**
+ * The wait before repeating a read that was answered `429` with `retryAfter`
+ * seconds, in ms: at least 1 second, and used in place of the computed
+ * backoff. `undefined` when it is longer than `maxDelayMs`, or than a timer
+ * can hold: the read is then not repeated, so the caller decides.
+ */
+export function retryAfterDelay(
+  retryAfter: number,
+  opts: Required<RetryOptions>,
+): number | undefined {
+  const ms = Math.max(retryAfter, MIN_RETRY_AFTER_SECONDS) * 1000;
+  return ms <= Math.min(opts.maxDelayMs, MAX_TIMER_MS) ? ms : undefined;
 }
 
 /** Exponential backoff with full jitter, so parallel clients don't resonate. */

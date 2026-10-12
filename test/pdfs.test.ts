@@ -7,6 +7,7 @@ import {
   HuurayConnectionError,
   HuurayIndeterminateOrderError,
   HuurayNotFoundError,
+  HuurayRateLimitError,
   HuurayServerError,
   HuurayTimeoutError,
   HuurayValidationError,
@@ -56,6 +57,12 @@ const notReady = (retryAfter?: string): MockResponse => ({
   },
   ...(retryAfter === undefined ? {} : { headers: { 'Retry-After': retryAfter } }),
 });
+/** A 429, with `Retry-After` when given. */
+const rateLimited = (retryAfter?: string): MockResponse => ({
+  status: 429,
+  json: { OrderUID: null, Documents: null, Status: 429, StatusMessage: 'Too Many Requests' },
+  ...(retryAfter === undefined ? {} : { headers: { 'Retry-After': retryAfter } }),
+});
 const RETRIES = { retry: { maxRetries: 3, baseDelayMs: 1 } };
 
 /** The error a call rejects with. Fails if it resolves. */
@@ -96,6 +103,8 @@ function expectNoContent(text: string): void {
 /**
  * A PdfsResource on a recording fetch, with a clock that only moves when it is
  * told to: each sleep moves it by the time slept, and each request by `requestMs`.
+ * `waits` are the waits between polls, `retryWaits` the client's own waits
+ * between the retries of one poll.
  */
 function pdfClient(
   responses: MockResponse | MockResponse[],
@@ -104,6 +113,7 @@ function pdfClient(
   const rec = recordingFetch(responses);
   let now = 0;
   const waits: number[] = [];
+  const retryWaits: number[] = [];
   const clock: PollClock = {
     now: () => now,
     sleep: async (ms) => {
@@ -111,16 +121,22 @@ function pdfClient(
       now += ms;
     },
   };
-  const client = new HuurayClient({
-    apiToken: 'test-token',
-    apiSecret: 'test-secret',
-    retry: { maxRetries, baseDelayMs: 1 },
-    fetch: (input, init) => {
-      now += requestMs;
-      return rec.fetch(input, init);
+  const client = new HuurayClient(
+    {
+      apiToken: 'test-token',
+      apiSecret: 'test-secret',
+      retry: { maxRetries, baseDelayMs: 1 },
+      fetch: (input, init) => {
+        now += requestMs;
+        return rec.fetch(input, init);
+      },
     },
-  });
-  return { pdfs: new PdfsResource(client, clock), calls: rec.calls, waits };
+    async (ms) => {
+      retryWaits.push(ms);
+      now += ms;
+    },
+  );
+  return { pdfs: new PdfsResource(client, clock), calls: rec.calls, waits, retryWaits };
 }
 
 describe('pdfs.get() request', () => {
@@ -406,6 +422,23 @@ describe('pdfs.get() is a read, retried under the ordinary policy', () => {
     expect(calls).toHaveLength(4);
   });
 
+  it('retries a 429, and returns the documents', async () => {
+    const { client, calls } = testClient([rateLimited(), READY], RETRIES);
+    const result = await client.pdfs.get({ orderUid: ORDER });
+    expect(result.ready).toBe(true);
+    expect(calls).toHaveLength(2);
+    expect(new Set(calls.map((c) => c.headers['X-API-NONCE'])).size).toBe(2);
+  });
+
+  it('throws the rate-limit error after the last retry of a 429, never the indeterminate-order one', async () => {
+    const { client, calls } = testClient(rateLimited(), RETRIES);
+    const err = await caught(() => client.pdfs.get({ orderUid: ORDER }));
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(err).not.toBeInstanceOf(HuurayIndeterminateOrderError);
+    expect(err).toMatchObject({ httpStatus: 429, retryAfter: null, path: '/v4/Pdf' });
+    expect(calls).toHaveLength(4);
+  });
+
   it('does not retry a 202: it is returned as not ready', async () => {
     const { client, calls } = testClient([notReady('30')], RETRIES);
     await expect(client.pdfs.get({ orderUid: ORDER })).resolves.toMatchObject({ ready: false });
@@ -610,6 +643,44 @@ describe('pdfs.getWhenReady()', () => {
     expect(calls).toHaveLength(3);
     expect(waits).toEqual([1000]);
     expect(new Set(calls.map((c) => c.headers['X-API-NONCE'])).size).toBe(3);
+  });
+
+  it('waits the Retry-After of a 429 as a retry of that poll, then keeps polling', async () => {
+    const { pdfs, calls, waits, retryWaits } = pdfClient(
+      [notReady('5'), rateLimited('2'), notReady('7'), READY],
+      { maxRetries: 2 },
+    );
+    await expect(pdfs.getWhenReady({ orderUid: ORDER })).resolves.toMatchObject({ ready: true });
+    expect(calls).toHaveLength(4);
+    expect(waits).toEqual([5000, 7000]);
+    expect(retryWaits).toEqual([2000]);
+  });
+
+  it('ends the wait with the rate-limit error when a 429 outlives the retries of a poll', async () => {
+    const { pdfs, calls, waits, retryWaits } = pdfClient(
+      [notReady('5'), rateLimited('1'), rateLimited('1'), rateLimited('1')],
+      { maxRetries: 2 },
+    );
+    const err = await caught(() => pdfs.getWhenReady({ orderUid: ORDER }));
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(err).not.toBeInstanceOf(HuurayTimeoutError);
+    expect(err).toMatchObject({ httpStatus: 429, retryAfter: 1, path: '/v4/Pdf' });
+    // No polling on top of the retries: the strict queue holds four responses.
+    expect(calls).toHaveLength(4);
+    expect(waits).toEqual([5000]);
+    expect(retryWaits).toEqual([1000, 1000]);
+  });
+
+  it('ends the wait at once on a 429 whose Retry-After is longer than maxDelayMs, though maxWaitMs has room', async () => {
+    const { pdfs, calls, waits, retryWaits } = pdfClient([notReady('5'), rateLimited('120')], {
+      maxRetries: 2,
+    });
+    const err = await caught(() => pdfs.getWhenReady({ orderUid: ORDER }));
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(err).toMatchObject({ retryAfter: 120 });
+    expect(calls).toHaveLength(2);
+    expect(waits).toEqual([5000]);
+    expect(retryWaits).toEqual([]);
   });
 
   it.each([

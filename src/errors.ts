@@ -88,11 +88,16 @@ export class HuurayApiError extends HuurayError {
     super(message);
   }
 
+  /**
+   * @param retryAfter Whole seconds from the `Retry-After` response header, or
+   *   `null`. Kept only on a `429`, as {@link HuurayRateLimitError.retryAfter}.
+   */
   static from(
     httpStatus: number,
     body: unknown,
     method: string,
     path: string,
+    retryAfter: number | null = null,
   ): HuurayApiError {
     const b = (body ?? {}) as { Status?: number; StatusMessage?: string; Message?: string };
     const statusMessage = b.StatusMessage ?? b.Message;
@@ -107,6 +112,7 @@ export class HuurayApiError extends HuurayError {
     if (httpStatus === 401 || httpStatus === 403) return new HuurayAuthError(...args);
     if (httpStatus === 404) return new HuurayNotFoundError(...args);
     if (httpStatus === 422) return new HuurayValidationError(...args);
+    if (httpStatus === 429) return new HuurayRateLimitError(...args, retryAfter);
     if (httpStatus >= 500) return new HuurayServerError(...args);
     return new HuurayApiError(...args);
   }
@@ -131,6 +137,42 @@ export class HuurayNotFoundError extends HuurayApiError {
 /** 422 — the request was well-formed but rejected. Read `statusMessage`. */
 export class HuurayValidationError extends HuurayApiError {
   override readonly name = 'HuurayValidationError';
+}
+
+/**
+ * 429: the rate limit for your IP address was exceeded, and the request was
+ * not processed.
+ *
+ * Because it was not processed, it is safe to send the same request again
+ * after waiting `retryAfter` seconds, an order, resend, cancel or upload
+ * included. So a `429` on an order is thrown as this error, never as
+ * {@link HuurayIndeterminateOrderError}.
+ *
+ * A read is repeated automatically: after `retryAfter` seconds when that is
+ * within `retry.maxDelayMs`, or after the usual backoff when the API sends no
+ * `Retry-After`. This error is thrown when the retries are used up, or at once
+ * when `retryAfter` is longer than `retry.maxDelayMs`. A write is never
+ * repeated automatically, so there it is thrown at once.
+ */
+export class HuurayRateLimitError extends HuurayApiError {
+  override readonly name = 'HuurayRateLimitError';
+
+  constructor(
+    message: string,
+    httpStatus: number,
+    status: number | undefined,
+    statusMessage: string | undefined,
+    body: unknown,
+    method: string,
+    path: string,
+    /**
+     * Whole seconds from the `Retry-After` response header, or `null` when the
+     * header is absent or not a number of seconds.
+     */
+    readonly retryAfter: number | null,
+  ) {
+    super(message, httpStatus, status, statusMessage, body, method, path);
+  }
 }
 
 /** 5xx — a server-side failure. Safe to retry only for reads. */

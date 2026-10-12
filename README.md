@@ -211,6 +211,8 @@ This is why `sendReward()` requires a `refId` even though the API treats it as o
 
 Reads *are* retried — with backoff, on connection failures and 5xx.
 
+A `429` means the rate limit for your IP address was exceeded and the request was not processed. On a read the client waits the `Retry-After` seconds and asks again, unless that is longer than `retry.maxDelayMs` (4 seconds by default). Otherwise, and on every order, resend, cancel and upload, it throws `HuurayRateLimitError` with `retryAfter` in seconds. That is never `HuurayIndeterminateOrderError`: nothing was processed, so the same request is safe to send again after waiting.
+
 ### 3. Synchronous and asynchronous orders are different calls
 
 | | `orders.create()` | `orders.createSync()` |
@@ -323,11 +325,12 @@ Every error class below extends `HuurayError`. Input checks on arguments throw a
 | `HuurayAuthError` | 401 or 403 — see *Authentication* above |
 | `HuurayNotFoundError` | 404 |
 | `HuurayValidationError` | 422 |
+| `HuurayRateLimitError` | 429: the rate limit was exceeded and the request was not processed; safe to send again after `retryAfter` seconds |
 | `HuurayServerError` | 5xx |
-| `HuurayApiError` | any other non-2xx; the base for the four above |
+| `HuurayApiError` | any other non-2xx; the base for the five above |
 | `HuurayIndeterminateOrderError` | an order whose outcome is unknown — **do not retry** |
 
-API errors carry `httpStatus`, `status`, `statusMessage`, and the parsed `body`. The client reads `StatusMessage` and falls back to the deprecated `Message`.
+API errors carry `httpStatus`, `status`, `statusMessage`, and the parsed `body`. The client reads `StatusMessage` and falls back to the deprecated `Message`. `HuurayRateLimitError` also carries `retryAfter`: the `Retry-After` header in whole seconds, or `null` when it is absent or not a number of seconds.
 
 ## Client options
 

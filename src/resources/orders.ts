@@ -281,7 +281,9 @@ export class OrdersResource extends Resource {
    *
    * **Not retried on failure.** The endpoint has no idempotency key, so a retry
    * can order twice. A timeout or server error throws
-   * {@link HuurayIndeterminateOrderError} instead.
+   * {@link HuurayIndeterminateOrderError} instead. A `429` throws
+   * `HuurayRateLimitError`: the order was not processed, so it is safe to send
+   * again after waiting.
    */
   async create(params: CreateOrderParams): Promise<CreateOrderResult> {
     const body = this.#buildOrderBody(params, false);
@@ -497,6 +499,7 @@ export class OrdersResource extends Resource {
       return data;
     } catch (cause) {
       // The request may have been processed. Never retry; make the caller reconcile.
+      // A 429 is not wrapped: the spec says the request was not processed.
       if (cause instanceof HuurayConnectionError || cause instanceof HuurayServerError) {
         throw new HuurayIndeterminateOrderError(refId, { cause });
       }

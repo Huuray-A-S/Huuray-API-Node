@@ -34,6 +34,7 @@ interface SpecDoc {
 interface SpecOperation {
   requestBody?: { content?: Record<string, SpecMediaType> };
   parameters?: { name: string; in: string; required?: boolean }[];
+  responses?: Record<string, { headers?: Record<string, { schema?: SpecSchema }> }>;
 }
 interface SpecMediaType {
   schema?: SpecSchema;
@@ -559,6 +560,22 @@ describe('exerciseEverything stays mechanically linked to the public surface', (
       .map((r) => r.constructor.name)
       .sort();
     expect(onClient).toEqual(Object.keys(EXERCISED).sort());
+  });
+});
+
+describe('rate limiting, as the spec documents it', () => {
+  it('every v4 operation documents a 429 with a Retry-After header in whole seconds', () => {
+    // On the strength of this the client maps a 429 on any operation to
+    // HuurayRateLimitError, and reads its Retry-After as seconds.
+    const undocumented: string[] = [];
+    for (const [path, item] of Object.entries(SPEC.paths)) {
+      for (const [verb, op] of Object.entries(item)) {
+        if (verb === 'parameters') continue;
+        const header = op.responses?.['429']?.headers?.['Retry-After'];
+        if (header?.schema?.type !== 'integer') undocumented.push(`${verb.toUpperCase()} ${path}`);
+      }
+    }
+    expect(undocumented).toEqual([]);
   });
 });
 

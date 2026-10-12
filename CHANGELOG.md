@@ -68,6 +68,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   against the schema, and a `format: binary` property as a file part with a file
   name, failing closed on any other shape. The test fetch no longer JSON-parses a
   body that is not sent as JSON, so such a body fails a gate instead of the run.
+- **`HuurayRateLimitError` for HTTP 429**, which the specification now documents
+  on every operation: the rate limit for your IP address was exceeded and the
+  request was not processed. It extends `HuurayApiError` and adds `retryAfter`:
+  the `Retry-After` header in whole seconds, or `null` when it is absent or not
+  a number of seconds. Because the request was not processed, the same request
+  is safe to send again after waiting, so a 429 on an order is never
+  `HuurayIndeterminateOrderError`. `HuurayApiError.from()` takes the seconds as
+  an optional fifth argument.
+- **A read answered 429 waits the `Retry-After` seconds** (at least 1) in place
+  of the computed backoff, then asks again. When that is longer than
+  `retry.maxDelayMs` (default 4000) the client does not wait: it throws
+  `HuurayRateLimitError` at once, so the caller decides. Without a usable
+  `Retry-After` the backoff applies as before, and when the retries are used up
+  the error is thrown. Orders, resends, cancels and uploads are still never
+  retried: a 429 there throws `HuurayRateLimitError` at once.
+  `pdfs.getWhenReady()` does not wait a 429 out: one that outlives the retries
+  of a request ends the wait with `HuurayRateLimitError`. The conformance gates
+  check that every operation documents a 429 with a `Retry-After` in whole
+  seconds.
 
 ### Security
 

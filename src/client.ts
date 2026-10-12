@@ -3,9 +3,18 @@ import {
   HuurayApiError,
   HuurayConfigError,
   HuurayConnectionError,
+  HuurayRateLimitError,
   HuurayTimeoutError,
 } from './errors.js';
-import { DEFAULT_RETRY, backoffDelay, isRetryableStatus, sleep, type RetryOptions } from './retry.js';
+import {
+  DEFAULT_RETRY,
+  backoffDelay,
+  isRetryableStatus,
+  parseRetryAfter,
+  retryAfterDelay,
+  sleep,
+  type RetryOptions,
+} from './retry.js';
 import { VERSION } from './version.gen.js';
 import { BalancesResource } from './resources/balances.js';
 import { CatalogueResource } from './resources/catalogue.js';
@@ -125,8 +134,14 @@ export class HuurayClient {
   readonly #fetch: typeof globalThis.fetch;
   readonly #userAgent: string;
   readonly #nonceFactory: () => string;
+  readonly #sleep: (ms: number) => Promise<void>;
 
-  constructor(options: HuurayClientOptions) {
+  /**
+   * @param wait Replaced by the test suite, so the waits between retries are
+   *   tested without waiting.
+   * @internal `wait` is not part of the semver-stable surface.
+   */
+  constructor(options: HuurayClientOptions, wait: (ms: number) => Promise<void> = sleep) {
     // A token of only whitespace counts as missing: fetch trims header values,
     // so the request would go out with a blank X-API-TOKEN.
     if (!options?.apiToken || String(options.apiToken).trim() === '') {
@@ -235,6 +250,7 @@ export class HuurayClient {
       maxDelayMs: Math.max(0, retry.maxDelayMs ?? DEFAULT_RETRY.maxDelayMs),
     };
     this.#nonceFactory = options.nonceFactory ?? generateNonce;
+    this.#sleep = wait;
 
     const injected = options.fetch ?? globalThis.fetch;
     if (typeof injected !== 'function') {
@@ -363,9 +379,12 @@ export class HuurayClient {
 
     const attempts = options.retryable ? this.#retry.maxRetries : 0;
     let lastError: unknown;
+    // The wait a 429 asked for with Retry-After, used in place of the backoff.
+    let retryAfterMs: number | undefined;
 
     for (let attempt = 0; attempt <= attempts; attempt++) {
-      if (attempt > 0) await sleep(backoffDelay(attempt - 1, this.#retry));
+      if (attempt > 0) await this.#sleep(retryAfterMs ?? backoffDelay(attempt - 1, this.#retry));
+      retryAfterMs = undefined;
 
       // A fresh nonce every attempt: the API rejects a repeat for 60 days.
       const headers: Record<string, string> = {
@@ -455,8 +474,21 @@ export class HuurayClient {
         return { data: parsed as T, httpStatus: response.status, headers: response.headers };
       }
 
-      lastError = HuurayApiError.from(response.status, parsed, method, path);
-      if (attempt < attempts && isRetryableStatus(response.status)) continue;
+      lastError = HuurayApiError.from(
+        response.status,
+        parsed,
+        method,
+        path,
+        parseRetryAfter(response.headers.get('Retry-After')),
+      );
+      if (attempt < attempts && isRetryableStatus(response.status)) {
+        if (lastError instanceof HuurayRateLimitError && lastError.retryAfter !== null) {
+          retryAfterMs = retryAfterDelay(lastError.retryAfter, this.#retry);
+          // Longer than the policy waits: not slept, so the caller decides.
+          if (retryAfterMs === undefined) throw lastError;
+        }
+        continue;
+      }
       throw lastError;
     }
 

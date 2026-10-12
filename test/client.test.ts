@@ -1,5 +1,5 @@
 import { inspect } from 'node:util';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   HuurayApiError,
   HuurayAuthError,
@@ -8,13 +8,15 @@ import {
   HuurayConnectionError,
   HuurayIndeterminateOrderError,
   HuurayNotFoundError,
+  HuurayRateLimitError,
   HuurayServerError,
   HuurayTimeoutError,
   HuurayValidationError,
   signRequest,
   type HuurayClientOptions,
+  type RetryOptions,
 } from '../src/index.js';
-import { testClient } from './helpers.js';
+import { recordingFetch, testClient, type MockResponse } from './helpers.js';
 
 /** The error a call throws, synchronously or as a rejection. Fails if it does not throw. */
 async function caught(call: () => unknown): Promise<unknown> {
@@ -43,6 +45,34 @@ function dump(err: unknown): string {
  * helpers.ts skips that validation, and with it the way these inputs used to
  * fail: as a connection error quoting the value.
  */
+/** A 429, with `Retry-After` when given. */
+const rateLimited = (retryAfter?: string): MockResponse => ({
+  status: 429,
+  json: { Status: 429, StatusMessage: 'Too Many Requests' },
+  ...(retryAfter === undefined ? {} : { headers: { 'Retry-After': retryAfter } }),
+});
+
+/**
+ * A client that retries reads twice, on a recording fetch, whose waits between
+ * attempts are recorded in `waits` instead of slept.
+ */
+function retryingClient(responses: MockResponse[], retry: RetryOptions = {}) {
+  const rec = recordingFetch(responses);
+  const waits: number[] = [];
+  const client = new HuurayClient(
+    {
+      apiToken: 'test-token',
+      apiSecret: 'test-secret',
+      fetch: rec.fetch,
+      retry: { maxRetries: 2, ...retry },
+    },
+    async (ms) => {
+      waits.push(ms);
+    },
+  );
+  return { client, calls: rec.calls, waits };
+}
+
 function validatingFetch(): typeof globalThis.fetch {
   return (async (input: unknown, init?: RequestInit) => {
     new Request(String(input), init);
@@ -302,6 +332,7 @@ describe('error mapping', () => {
     [403, HuurayAuthError],
     [404, HuurayNotFoundError],
     [422, HuurayValidationError],
+    [429, HuurayRateLimitError],
     [500, HuurayServerError],
     [400, HuurayApiError],
   ])('maps HTTP %i to the right error type', async (status, type) => {
@@ -332,6 +363,44 @@ describe('error mapping', () => {
     });
   });
 
+  it('maps a 429 to HuurayRateLimitError, an API error, with the Retry-After seconds', async () => {
+    const { client } = testClient(rateLimited('17'));
+    const err = await caught(() => client.balances.list());
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(err).toBeInstanceOf(HuurayApiError);
+    expect(err).toMatchObject({
+      name: 'HuurayRateLimitError',
+      httpStatus: 429,
+      status: 429,
+      statusMessage: 'Too Many Requests',
+      retryAfter: 17,
+      method: 'GET',
+      path: '/v4/Balance',
+    });
+  });
+
+  it.each([
+    ['no Retry-After header', undefined, null],
+    ['a Retry-After of 0', '0', 0],
+    ['surrounding spaces', ' 7 ', 7],
+    ['an HTTP date', 'Wed, 21 Oct 2026 07:28:00 GMT', null],
+    ['a fraction', '1.5', null],
+    ['a negative number', '-5', null],
+    ['a number too large to be whole', '99999999999999999999', null],
+  ])('reads the retryAfter of a 429 with %s as %j', async (_, header, expected) => {
+    const { client } = testClient(rateLimited(header));
+    const err = await caught(() => client.balances.list());
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect((err as HuurayRateLimitError).retryAfter).toBe(expected);
+  });
+
+  it('keeps Retry-After only on a 429', async () => {
+    const { client } = testClient({ status: 503, headers: { 'Retry-After': '17' } });
+    const err = await caught(() => client.balances.list());
+    expect(err).toBeInstanceOf(HuurayServerError);
+    expect(err).not.toHaveProperty('retryAfter');
+  });
+
   it('redacts bearer and contact fields from the retained error body', async () => {
     const { client } = testClient({
       status: 400,
@@ -348,6 +417,8 @@ describe('error mapping', () => {
 });
 
 describe('retry policy', () => {
+  const order = { productToken: 't', value: 100, currency: 'DKK', quantity: 1 };
+
   it('retries a read on 503', async () => {
     const { client, calls } = testClient(
       [{ status: 503 }, { status: 200, json: { Balances: [] } }],
@@ -377,6 +448,37 @@ describe('retry policy', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it.each([
+    ['orders.create()', (c: HuurayClient) => c.orders.create(order)],
+    ['orders.createSync()', (c: HuurayClient) => c.orders.createSync(order)],
+    [
+      'sendReward()',
+      (c: HuurayClient) =>
+        c.sendReward({
+          productToken: 't',
+          value: 100,
+          currency: 'DKK',
+          recipient: { email: 'jane@example.com' },
+          templateId: 42,
+          refId: 'r',
+        }),
+    ],
+    ['orders.resend()', (c: HuurayClient) => c.orders.resend({ orderUid: 'x' })],
+    ['orders.cancel()', (c: HuurayClient) => c.orders.cancel({ orderUid: 'x' })],
+    [
+      'uploads.create()',
+      (c: HuurayClient) => c.uploads.create({ file: new Uint8Array([1]), fileName: 'po.pdf' }),
+    ],
+  ])('never retries %s on a 429: it throws the rate-limit error at once', async (_, write) => {
+    const { client, calls, waits } = retryingClient([rateLimited('1')], { maxRetries: 3 });
+    const err = await caught(() => write(client));
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(err).not.toBeInstanceOf(HuurayIndeterminateOrderError);
+    expect(err).toMatchObject({ httpStatus: 429, retryAfter: 1 });
+    expect(calls).toHaveLength(1);
+    expect(waits).toEqual([]);
+  });
+
   it('does not retry a 400 — the request is wrong, repeating will not help', async () => {
     const { client, calls } = testClient({ status: 400 }, { retry: { maxRetries: 3, baseDelayMs: 1 } });
     await client.balances.list().catch(() => undefined);
@@ -398,6 +500,164 @@ describe('retry policy', () => {
     const { client, calls } = testClient(undefined, { retry: { maxRetries: -3 } });
     await expect(client.balances.list()).resolves.toBeDefined();
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe('a 429 on a read', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Pins the jitter, so a computed backoff is its ceiling: 250 ms, then 500 ms. */
+  const noJitter = () => vi.spyOn(Math, 'random').mockReturnValue(1);
+
+  it('waits the Retry-After seconds in place of the backoff, then asks again with a new nonce', async () => {
+    noJitter();
+    const { client, calls, waits } = retryingClient([
+      rateLimited('3'),
+      { status: 200, json: { Balances: [] } },
+    ]);
+    await expect(client.balances.list()).resolves.toEqual({ balances: [] });
+    expect(waits).toEqual([3000]);
+    expect(calls).toHaveLength(2);
+    expect(new Set(calls.map((c) => c.headers['X-API-NONCE'])).size).toBe(2);
+  });
+
+  it('honours each Retry-After in turn, up to exactly maxDelayMs', async () => {
+    const { client, calls, waits } = retryingClient([
+      rateLimited('2'),
+      rateLimited('4'),
+      { status: 200, json: { Balances: [] } },
+    ]);
+    await client.balances.list();
+    expect(waits).toEqual([2000, 4000]);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('waits at least 1 second, whatever Retry-After says', async () => {
+    const { client, waits } = retryingClient([
+      rateLimited('0'),
+      { status: 200, json: { Balances: [] } },
+    ]);
+    await client.balances.list();
+    expect(waits).toEqual([1000]);
+  });
+
+  it('retries a POST that is a read the same way', async () => {
+    const { client, calls, waits } = retryingClient([
+      rateLimited('2'),
+      { status: 200, json: { OrderUID: 'uid-7', Vouchers: [] } },
+    ]);
+    await expect(client.orders.search({ refId: 'ref-9' })).resolves.toMatchObject({
+      orderUid: 'uid-7',
+    });
+    expect(waits).toEqual([2000]);
+    expect(calls).toHaveLength(2);
+  });
+
+  it('throws at once, without waiting, when Retry-After is longer than maxDelayMs', async () => {
+    // The default maxDelayMs is 4000. The strict queue holds one response.
+    const { client, calls, waits } = retryingClient([rateLimited('5')]);
+    const err = await caught(() => client.balances.list());
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(err).toMatchObject({ retryAfter: 5 });
+    expect(calls).toHaveLength(1);
+    expect(waits).toEqual([]);
+  });
+
+  it('throws at once when the 1-second minimum is itself longer than maxDelayMs', async () => {
+    const { client, calls, waits } = retryingClient([rateLimited('0')], { maxDelayMs: 500 });
+    const err = await caught(() => client.balances.list());
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(calls).toHaveLength(1);
+    expect(waits).toEqual([]);
+  });
+
+  it('waits a longer Retry-After when maxDelayMs allows it', async () => {
+    const { client, waits } = retryingClient(
+      [rateLimited('30'), { status: 200, json: { Balances: [] } }],
+      { maxDelayMs: 60_000 },
+    );
+    await client.balances.list();
+    expect(waits).toEqual([30_000]);
+  });
+
+  it('throws at once on a Retry-After no timer can hold, whatever maxDelayMs is', async () => {
+    const { client, calls, waits } = retryingClient([rateLimited('2147484')], {
+      maxDelayMs: Number.POSITIVE_INFINITY,
+    });
+    const err = await caught(() => client.balances.list());
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(calls).toHaveLength(1);
+    expect(waits).toEqual([]);
+  });
+
+  it.each([
+    ['no Retry-After', undefined],
+    ['a Retry-After that is not whole seconds', 'soon'],
+  ])('falls back to the computed backoff on %s', async (_, header) => {
+    noJitter();
+    const { client, calls, waits } = retryingClient([
+      rateLimited(header),
+      rateLimited(header),
+      { status: 200, json: { Balances: [] } },
+    ]);
+    await client.balances.list();
+    expect(waits).toEqual([250, 500]);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('does not carry a Retry-After over to the wait after a later attempt', async () => {
+    noJitter();
+    const { client, waits } = retryingClient([
+      rateLimited('3'),
+      { status: 503 },
+      { status: 200, json: { Balances: [] } },
+    ]);
+    await client.balances.list();
+    expect(waits).toEqual([3000, 500]);
+  });
+
+  it('does not read Retry-After on any other retried status', async () => {
+    noJitter();
+    const { client, waits } = retryingClient([
+      { status: 503, headers: { 'Retry-After': '3' } },
+      { status: 200, json: { Balances: [] } },
+    ]);
+    await client.balances.list();
+    expect(waits).toEqual([250]);
+  });
+
+  it('throws the rate-limit error when the retries are used up', async () => {
+    const { client, calls, waits } = retryingClient([
+      rateLimited('1'),
+      rateLimited('1'),
+      rateLimited('2'),
+    ]);
+    const err = await caught(() => client.balances.list());
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(err).toMatchObject({ httpStatus: 429, retryAfter: 2 });
+    expect(calls).toHaveLength(3);
+    expect(waits).toEqual([1000, 1000]);
+  });
+
+  it('throws it at once with maxRetries 0', async () => {
+    const { client, calls, waits } = retryingClient([rateLimited('1')], { maxRetries: 0 });
+    await expect(client.balances.list()).rejects.toBeInstanceOf(HuurayRateLimitError);
+    expect(calls).toHaveLength(1);
+    expect(waits).toEqual([]);
+  });
+
+  it('really waits, with the default timer, when no wait is injected', async () => {
+    const { client, calls } = testClient(
+      [rateLimited('1'), { status: 200, json: { Balances: [] } }],
+      { retry: { maxRetries: 1 } },
+    );
+    const start = performance.now();
+    await client.balances.list();
+    // A timer may fire a little before the clock reads the full second.
+    expect(performance.now() - start).toBeGreaterThanOrEqual(950);
+    expect(calls).toHaveLength(2);
   });
 });
 
