@@ -59,6 +59,11 @@ export interface MockResponse {
   throws?: Error;
   /** Resolve the response, but make reading its body throw — a mid-body drop. */
   bodyThrows?: Error;
+  /**
+   * Answer with a bare object that has only `ok`, `status` and `text()`, and no
+   * `headers` at all, as a minimal injected fetch may.
+   */
+  headerless?: boolean;
 }
 
 /** The three RequestInit header forms. (HeadersInit itself needs the DOM lib.) */
@@ -211,6 +216,9 @@ export function recordingFetch(responses: MockResponse | MockResponse[] = {}) {
 
     const status = mock.status ?? 200;
     const bodyText = mock.text ?? JSON.stringify(mock.json ?? { Status: status });
+    if (mock.headerless) {
+      return { ok: status >= 200 && status < 300, status, text: async () => bodyText };
+    }
     const response = new Response(bodyText, {
       status,
       headers: { 'Content-Type': 'application/json', ...mock.headers },

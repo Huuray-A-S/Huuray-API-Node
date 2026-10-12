@@ -217,7 +217,8 @@ export class PdfsResource extends Resource {
         // send() runs checkBody on every 2xx body it returns, which decoded
         // every Content.
         documents: (data?.Documents ?? []).map((d) => new PrintSafeDocument(d, DECODED.get(d)!)),
-        retryAfter: parseRetryAfter(headers.get('Retry-After')),
+        // An injected fetch may answer without `headers`.
+        retryAfter: parseRetryAfter(headers?.get('Retry-After') ?? null),
       },
       statusMessage: data?.StatusMessage ?? data?.Message ?? undefined,
     };

@@ -474,12 +474,17 @@ export class HuurayClient {
         return { data: parsed as T, httpStatus: response.status, headers: response.headers };
       }
 
+      // Retry-After is read on a 429 only, and an injected fetch may answer
+      // without `headers`: reading it must never replace the error of a failed
+      // order with a raw TypeError.
       lastError = HuurayApiError.from(
         response.status,
         parsed,
         method,
         path,
-        parseRetryAfter(response.headers.get('Retry-After')),
+        response.status === 429
+          ? parseRetryAfter(response.headers?.get('Retry-After') ?? null)
+          : null,
       );
       if (attempt < attempts && isRetryableStatus(response.status)) {
         if (lastError instanceof HuurayRateLimitError && lastError.retryAfter !== null) {

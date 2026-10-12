@@ -444,6 +444,35 @@ describe('pdfs.get() is a read, retried under the ordinary policy', () => {
     await expect(client.pdfs.get({ orderUid: ORDER })).resolves.toMatchObject({ ready: false });
     expect(calls).toHaveLength(1);
   });
+
+  it.each([
+    ['a 202', notReady(), false],
+    ['a 200', READY, true],
+  ])(
+    'reads %s from an injected fetch whose response has no headers, with no retryAfter',
+    async (_, response, ready) => {
+      const { client } = testClient({ ...response, headerless: true });
+      await expect(client.pdfs.get({ orderUid: ORDER })).resolves.toMatchObject({
+        ready,
+        orderUid: ORDER,
+        retryAfter: null,
+      });
+    },
+  );
+
+  it.each([
+    [503, HuurayServerError],
+    [429, HuurayRateLimitError],
+    [422, HuurayValidationError],
+  ])(
+    'throws a %i from an injected fetch whose response has no headers as %o',
+    async (status, type) => {
+      const { client } = testClient({ status, headerless: true });
+      const err = await caught(() => client.pdfs.get({ orderUid: ORDER }));
+      expect(err).toBeInstanceOf(type);
+      expect(err).toMatchObject({ httpStatus: status });
+    },
+  );
 });
 
 describe('pdfs.get() errors use the ordinary mapping', () => {

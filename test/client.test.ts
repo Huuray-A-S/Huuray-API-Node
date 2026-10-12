@@ -401,6 +401,44 @@ describe('error mapping', () => {
     expect(err).not.toHaveProperty('retryAfter');
   });
 
+  it.each([
+    [503, HuurayServerError],
+    [422, HuurayValidationError],
+    [400, HuurayApiError],
+  ])('reads no header at all on a %i', async (status, type) => {
+    // Only a 429 documents a header, so nothing an injected fetch does with
+    // `headers` can replace another error.
+    const response = {
+      ok: false,
+      status,
+      text: async () => '',
+      get headers(): never {
+        throw new Error('the headers were read');
+      },
+    };
+    const client = new HuurayClient({
+      apiToken: 't',
+      apiSecret: 's',
+      fetch: (async () => response) as unknown as typeof globalThis.fetch,
+    });
+    expect(await caught(() => client.balances.list())).toBeInstanceOf(type);
+  });
+
+  it.each([
+    ['no headers', {}],
+    ['headers that are null', { headers: null }],
+  ])('maps a 429 from a fetch whose response has %s, with no retryAfter', async (_, extra) => {
+    const response = { ok: false, status: 429, text: async () => '', ...extra };
+    const client = new HuurayClient({
+      apiToken: 't',
+      apiSecret: 's',
+      fetch: (async () => response) as unknown as typeof globalThis.fetch,
+    });
+    const err = await caught(() => client.balances.list());
+    expect(err).toBeInstanceOf(HuurayRateLimitError);
+    expect(err).toMatchObject({ httpStatus: 429, retryAfter: null });
+  });
+
   it('redacts bearer and contact fields from the retained error body', async () => {
     const { client } = testClient({
       status: 400,

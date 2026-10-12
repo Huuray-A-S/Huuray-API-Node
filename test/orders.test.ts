@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   HuurayIndeterminateOrderError,
   HuurayRateLimitError,
+  HuurayServerError,
+  HuurayValidationError,
   SYNC_QUANTITY_LIMIT,
   type CreateOrderParams,
   type HuurayApiError,
@@ -533,6 +535,53 @@ describe('indeterminate orders', () => {
     const { client } = testClient({ status: 422, json: { Status: 422, StatusMessage: 'bad' } });
     await expect(client.orders.create(base)).rejects.not.toBeInstanceOf(
       HuurayIndeterminateOrderError,
+    );
+  });
+
+  describe('from an injected fetch whose response has no headers', () => {
+    // Retry-After is read only on a 429, and a missing headers object is
+    // tolerated there, so reading it never replaces an order's error with a
+    // raw TypeError.
+    const order = (client: HuurayClient, method: 'create' | 'createSync') =>
+      client.orders[method]({ ...base, refId: 'ref-9' }).then(
+        () => expect.unreachable('order must reject'),
+        (e: unknown) => e,
+      );
+
+    it.each(['create', 'createSync'] as const)(
+      '%s() still throws HuurayIndeterminateOrderError on a 503',
+      async (method) => {
+        const { client, calls } = testClient({ status: 503, headerless: true });
+        const err = await order(client, method);
+        expect(err).toBeInstanceOf(HuurayIndeterminateOrderError);
+        expect(err).toMatchObject({ refId: 'ref-9' });
+        expect((err as Error).cause).toBeInstanceOf(HuurayServerError);
+        expect(calls).toHaveLength(1);
+      },
+    );
+
+    it.each(['create', 'createSync'] as const)(
+      '%s() still throws HuurayValidationError on a 422',
+      async (method) => {
+        const { client } = testClient({
+          status: 422,
+          json: { Status: 422, StatusMessage: 'bad' },
+          headerless: true,
+        });
+        const err = await order(client, method);
+        expect(err).toBeInstanceOf(HuurayValidationError);
+        expect(err).toMatchObject({ httpStatus: 422, statusMessage: 'bad' });
+      },
+    );
+
+    it.each(['create', 'createSync'] as const)(
+      '%s() throws HuurayRateLimitError on a 429, with no retryAfter',
+      async (method) => {
+        const { client } = testClient({ status: 429, headerless: true });
+        const err = await order(client, method);
+        expect(err).toBeInstanceOf(HuurayRateLimitError);
+        expect(err).toMatchObject({ httpStatus: 429, retryAfter: null });
+      },
     );
   });
 });
