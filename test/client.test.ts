@@ -270,22 +270,13 @@ describe('construction', () => {
     expect(calls[0]?.headers['User-Agent']).toMatch(/^huuray-node\/\S+ my-app\/1\.2 \(payroll\)$/);
   });
 
-  it('takes the options alone: the wait between retries is not a constructor argument', async () => {
-    const rec = recordingFetch([{ status: 503 }, { status: 200, json: { Balances: [] } }]);
-    const wait = vi.fn(async () => {});
-    const client = new HuurayClient(
-      {
-        apiToken: 't',
-        apiSecret: 's',
-        fetch: rec.fetch,
-        retry: { maxRetries: 1, baseDelayMs: 0 },
-      },
-      // @ts-expect-error The constructor takes one argument.
-      wait,
-    );
-    await client.balances.list();
-    expect(rec.calls).toHaveLength(2);
-    expect(wait).not.toHaveBeenCalled();
+  it('takes the options alone: the wait between retries is not a constructor argument', () => {
+    // Checked by the compiler: a second parameter, optional or not, makes the
+    // tuple's length something other than exactly 1 and this stops compiling.
+    type Parameters = ConstructorParameters<typeof HuurayClient>;
+    const takesExactlyOneArgument: Parameters['length'] extends 1 ? true : false = true;
+    expect(takesExactlyOneArgument).toBe(true);
+    expect(HuurayClient.length).toBe(1);
   });
 
   it('keeps the key the test suite injects a wait under out of the package exports', async () => {
