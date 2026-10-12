@@ -13,8 +13,10 @@ import {
   HuurayValidationError,
   redact,
   safeStringify,
+  type HuurayClientOptions,
   type PdfResult,
 } from '../src/index.js';
+import { WAIT } from '../src/client.js';
 import { PdfsResource, type PollClock } from '../src/resources/pdfs.js';
 import { recordingFetch, testClient, type MockResponse } from './helpers.js';
 
@@ -121,21 +123,20 @@ function pdfClient(
       now += ms;
     },
   };
-  const client = new HuurayClient(
-    {
-      apiToken: 'test-token',
-      apiSecret: 'test-secret',
-      retry: { maxRetries, baseDelayMs: 1 },
-      fetch: (input, init) => {
-        now += requestMs;
-        return rec.fetch(input, init);
-      },
+  const client = new HuurayClient({
+    apiToken: 'test-token',
+    apiSecret: 'test-secret',
+    retry: { maxRetries, baseDelayMs: 1 },
+    fetch: (input, init) => {
+      now += requestMs;
+      return rec.fetch(input, init);
     },
-    async (ms) => {
+    // An internal key, so the public options type does not know it.
+    [WAIT]: async (ms: number) => {
       retryWaits.push(ms);
       now += ms;
     },
-  );
+  } as HuurayClientOptions);
   return { pdfs: new PdfsResource(client, clock), calls: rec.calls, waits, retryWaits };
 }
 

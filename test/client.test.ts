@@ -16,6 +16,7 @@ import {
   type HuurayClientOptions,
   type RetryOptions,
 } from '../src/index.js';
+import { WAIT } from '../src/client.js';
 import { recordingFetch, testClient, type MockResponse } from './helpers.js';
 
 /** The error a call throws, synchronously or as a rejection. Fails if it does not throw. */
@@ -59,17 +60,16 @@ const rateLimited = (retryAfter?: string): MockResponse => ({
 function retryingClient(responses: MockResponse[], retry: RetryOptions = {}) {
   const rec = recordingFetch(responses);
   const waits: number[] = [];
-  const client = new HuurayClient(
-    {
-      apiToken: 'test-token',
-      apiSecret: 'test-secret',
-      fetch: rec.fetch,
-      retry: { maxRetries: 2, ...retry },
-    },
-    async (ms) => {
+  const client = new HuurayClient({
+    apiToken: 'test-token',
+    apiSecret: 'test-secret',
+    fetch: rec.fetch,
+    retry: { maxRetries: 2, ...retry },
+    // An internal key, so the public options type does not know it.
+    [WAIT]: async (ms: number) => {
       waits.push(ms);
     },
-  );
+  } as HuurayClientOptions);
   return { client, calls: rec.calls, waits };
 }
 
@@ -267,6 +267,33 @@ describe('construction', () => {
     const { client, calls } = testClient(undefined, { userAgent: 'my-app/1.2 (payroll)' });
     await client.balances.list();
     expect(calls[0]?.headers['User-Agent']).toMatch(/^huuray-node\/\S+ my-app\/1\.2 \(payroll\)$/);
+  });
+
+  it('takes the options alone: the wait between retries is not a constructor argument', async () => {
+    const rec = recordingFetch([{ status: 503 }, { status: 200, json: { Balances: [] } }]);
+    const wait = vi.fn(async () => {});
+    const client = new HuurayClient(
+      {
+        apiToken: 't',
+        apiSecret: 's',
+        fetch: rec.fetch,
+        retry: { maxRetries: 1, baseDelayMs: 0 },
+      },
+      // @ts-expect-error The constructor takes one argument.
+      wait,
+    );
+    await client.balances.list();
+    expect(rec.calls).toHaveLength(2);
+    expect(wait).not.toHaveBeenCalled();
+  });
+
+  it('keeps the key the test suite injects a wait under out of the package exports', async () => {
+    const exported: Record<string, unknown> = await import('../src/index.js');
+    expect(Object.values(exported)).not.toContain(WAIT);
+    expect(exported).not.toHaveProperty('WAIT');
+    // @ts-expect-error Nor is it a client option.
+    const options: HuurayClientOptions = { apiToken: 't', apiSecret: 's', [WAIT]: async () => {} };
+    expect(Reflect.ownKeys(options)).toContain(WAIT);
   });
 
   it('invokes an injected fetch without binding `this` to the client', async () => {

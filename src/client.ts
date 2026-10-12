@@ -38,6 +38,15 @@ const FORBIDDEN_METHOD = /^(?:CONNECT|TRACE|TRACK)$/i;
 const REQUEST_PATH = /^\/[\x21-\x7E]*$/;
 
 /**
+ * The options key the test suite passes a wait function under, so the waits
+ * between retries are tested without waiting.
+ *
+ * @internal Not exported from the package, and not part of the semver-stable
+ *   surface.
+ */
+export const WAIT = Symbol('wait');
+
+/**
  * A character a header value must not contain: an ASCII control character
  * (0x00-0x1F, 0x7F), which fetch refuses only once a request is attempted,
  * trims from either end, or sends through as-is, or anything above U+00FF,
@@ -136,12 +145,7 @@ export class HuurayClient {
   readonly #nonceFactory: () => string;
   readonly #sleep: (ms: number) => Promise<void>;
 
-  /**
-   * @param wait Replaced by the test suite, so the waits between retries are
-   *   tested without waiting.
-   * @internal `wait` is not part of the semver-stable surface.
-   */
-  constructor(options: HuurayClientOptions, wait: (ms: number) => Promise<void> = sleep) {
+  constructor(options: HuurayClientOptions) {
     // A token of only whitespace counts as missing: fetch trims header values,
     // so the request would go out with a blank X-API-TOKEN.
     if (!options?.apiToken || String(options.apiToken).trim() === '') {
@@ -250,7 +254,7 @@ export class HuurayClient {
       maxDelayMs: Math.max(0, retry.maxDelayMs ?? DEFAULT_RETRY.maxDelayMs),
     };
     this.#nonceFactory = options.nonceFactory ?? generateNonce;
-    this.#sleep = wait;
+    this.#sleep = (options as { [WAIT]?: (ms: number) => Promise<void> })[WAIT] ?? sleep;
 
     const injected = options.fetch ?? globalThis.fetch;
     if (typeof injected !== 'function') {
