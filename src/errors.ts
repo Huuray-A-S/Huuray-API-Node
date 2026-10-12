@@ -148,11 +148,11 @@ export class HuurayValidationError extends HuurayApiError {
  * included. So a `429` on an order is thrown as this error, never as
  * {@link HuurayIndeterminateOrderError}.
  *
- * A read is repeated automatically: after `retryAfter` seconds when that is
- * within `retry.maxDelayMs`, or after the usual backoff when the API sends no
- * `Retry-After`. This error is thrown when the retries are used up, or at once
- * when `retryAfter` is longer than `retry.maxDelayMs`. A write is never
- * repeated automatically, so there it is thrown at once.
+ * A read is repeated automatically: after `retryAfter` seconds (at least 1)
+ * when that wait is within `retry.maxDelayMs`, or after the usual backoff when
+ * the API sends no `Retry-After`. This error is thrown when the retries are
+ * used up, or at once when that wait is longer than `retry.maxDelayMs`. A
+ * write is never repeated automatically, so there it is thrown at once.
  */
 export class HuurayRateLimitError extends HuurayApiError {
   override readonly name = 'HuurayRateLimitError';

@@ -71,12 +71,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HuurayIndeterminateOrderError`. `HuurayApiError.from()` takes the seconds as
   an optional fifth argument.
 - **A read answered 429 waits the `Retry-After` seconds** (at least 1) in place
-  of the computed backoff, then asks again. When that is longer than
+  of the computed backoff, then asks again. When that wait is longer than
   `retry.maxDelayMs` (default 4000) the client does not wait: it throws
-  `HuurayRateLimitError` at once, so the caller decides. Without a usable
-  `Retry-After` the backoff applies as before, and when the retries are used up
-  the error is thrown. Orders, resends, cancels and uploads are still never
-  retried: a 429 there throws `HuurayRateLimitError` at once.
+  `HuurayRateLimitError` at once, so the caller decides. So with a `maxDelayMs`
+  below 1000, a 429 that carries `Retry-After` is never retried. Without a
+  usable `Retry-After` the backoff applies as before, and when the retries are
+  used up the error is thrown. Orders, resends, cancels and uploads are still
+  never retried: a 429 there throws `HuurayRateLimitError` at once.
   `pdfs.getWhenReady()` does not wait a 429 out: one that outlives the retries
   of a request ends the wait with `HuurayRateLimitError`. The conformance gates
   check that every operation documents a 429 with a `Retry-After` in whole
@@ -134,20 +135,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **`pdfTemplateUid` without `templateId` is no longer rejected.**
-  `orders.create()`, `orders.createSync()` and `sendReward()` threw a `TypeError`
-  before sending, which blocked valid orders. The specification says: for email
+  `orders.create()` and `orders.createSync()` threw a `TypeError` before
+  sending, which blocked valid orders. The specification says: for email
   delivery the PDF template is attached to the emails sent by
   `DeliveryTemplateId`, which must then be an email template; for a physical
   product (delivered by post only) it is the template the gift cards are printed
   with, and `DeliveryTemplateId` is not required. The order is now sent as given,
   with `DeliveryPDFTemplateUid` and without `DeliveryTemplateId`, and the API
   decides. `recipients` is still required only when `templateId` is set.
+  `sendReward()` always names a delivery template, so its `templateId` stays
+  required: use `orders.create()` for a physical product ordered with only a PDF
+  template.
 - **A wait between retries is never longer than a timer can hold.** With
   `retry.maxDelayMs` above 2147483647 and enough retries, the backoff passed that
   limit, where Node waits about 1 ms and emits a `TimeoutOverflowWarning`. The
   backoff is now capped at 2147483647 ms, as if `maxDelayMs` were that. A `NaN`
-  in `retry.baseDelayMs` or `retry.maxDelayMs`, which Node treats the same way,
-  now waits 0 ms, as `0` does.
+  in `retry.baseDelayMs` or `retry.maxDelayMs` is no longer handed to the timer:
+  the backoff is then 0 ms, as with `0`.
 - **`timeoutMs` must be a whole number from 1 to 2147483647**; anything else throws
   `HuurayConfigError` at construction. That is the range Node honours: it timed a
   request out after about 1 ms for `0` and, with a `TimeoutOverflowWarning`, for
@@ -206,7 +210,8 @@ First release. Complete coverage of the Huuray API v4.
   `orders.create()`, `orders.createSync()` and `sendReward()` accept an optional
   `pdfTemplateUid`, sent as `DeliveryPDFTemplateUid`. For email delivery the API
   requires `templateId` to be an email template; for a physical product
-  delivered by post no `templateId` is required.
+  delivered by post, `orders.create()` and `orders.createSync()` need no
+  `templateId`.
 - `request()` — an escape hatch that signs any call.
 - Read-only CLI: `balance`, `catalogue`, `templates`, `stock`, `rates`, `search`.
 - The CLI `templates` command lists PDF templates as well as delivery templates,

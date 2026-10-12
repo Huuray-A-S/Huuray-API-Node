@@ -23,9 +23,11 @@ export interface RetryOptions {
   /** Base delay in ms; doubles per attempt with jitter. Default `250`. */
   baseDelayMs?: number;
   /**
-   * Ceiling for a single backoff wait, and the longest `Retry-After` a read
-   * waits after a `429`: a longer one is thrown at once. Default `4000`.
-   * Anything above `2147483647`, the longest wait a timer holds, counts as that.
+   * Ceiling for a single backoff wait, and for the wait a read makes after a
+   * `429` with `Retry-After` (those seconds, at least 1): when that wait is
+   * longer, the `429` is thrown at once. So below `1000`, a `429` that carries
+   * `Retry-After` is never retried. Default `4000`. Anything above
+   * `2147483647`, the longest wait a timer holds, counts as that.
    */
   maxDelayMs?: number;
 }
@@ -86,8 +88,8 @@ export function retryAfterDelay(
  * Exponential backoff with full jitter, so parallel clients don't resonate.
  *
  * Never longer than a timer can hold, whatever `maxDelayMs` is: past that
- * Node warns and waits about 1 ms. And never NaN, which it does the same
- * with: a NaN option waits nothing, as 0 does.
+ * Node warns and waits about 1 ms. And never NaN, on which Node waits about
+ * 1 ms too: a NaN option waits nothing, as 0 does.
  */
 export function backoffDelay(attempt: number, opts: Required<RetryOptions>): number {
   const exponential = Math.min(opts.baseDelayMs * 2 ** attempt, opts.maxDelayMs, MAX_TIMER_MS);

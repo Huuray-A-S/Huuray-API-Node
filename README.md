@@ -211,7 +211,7 @@ This is why `sendReward()` requires a `refId` even though the API treats it as o
 
 Reads *are* retried — with backoff, on connection failures and 5xx.
 
-A `429` means the rate limit for your IP address was exceeded and the request was not processed. On a read the client waits the `Retry-After` seconds and asks again, unless that is longer than `retry.maxDelayMs` (4 seconds by default). Otherwise, and on every order, resend, cancel and upload, it throws `HuurayRateLimitError` with `retryAfter` in seconds. That is never `HuurayIndeterminateOrderError`: nothing was processed, so the same request is safe to send again after waiting.
+A `429` means the rate limit for your IP address was exceeded and the request was not processed. On a read the client waits the `Retry-After` seconds (at least 1) and asks again, up to `retry.maxRetries` times, unless that wait is longer than `retry.maxDelayMs` (4 seconds by default). Without a `Retry-After` it uses the usual backoff. When it stops, and on every order, resend, cancel and upload, it throws `HuurayRateLimitError` with `retryAfter` in seconds. That is never `HuurayIndeterminateOrderError`: nothing was processed, so the same request is safe to send again after waiting.
 
 ### 3. Synchronous and asynchronous orders are different calls
 

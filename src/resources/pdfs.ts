@@ -39,7 +39,9 @@ export interface GetPdfParams {
 export interface GetPdfWhenReadyParams extends GetPdfParams {
   /**
    * How long to keep asking, in milliseconds, from 0 to 2147483647. Default
-   * `600000` (10 minutes).
+   * `600000` (10 minutes). The waits between the retries of a single request
+   * (backoff or `Retry-After`) are not checked against it, so a call can end
+   * later.
    */
   maxWaitMs?: number;
 }

@@ -181,7 +181,11 @@ export interface SendRewardParams extends PurchaseOrderFields {
   value: number;
   currency: string;
   recipient: Recipient;
-  /** Delivery template id from `templates.list()`. */
+  /**
+   * Delivery template id from `templates.list()`. `sendReward()` always names
+   * a delivery template; use `orders.create()` for a physical product ordered
+   * with only a PDF template.
+   */
   templateId: number;
   /**
    * PDF template uid from `templates.list()` (`pdfTemplates`). For email

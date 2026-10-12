@@ -251,7 +251,9 @@ describe('PDF delivery templates', () => {
     ['orders.sendReward()', (c: HuurayClient, p: SendRewardParams) => c.orders.sendReward(p)],
     ['client.sendReward()', (c: HuurayClient, p: SendRewardParams) => c.sendReward(p)],
   ])('%s sends it as is when an untyped caller gives no templateId', async (_, send) => {
-    // The type requires templateId; nothing at run time does.
+    // sendReward() always names a delivery template: its type requires
+    // templateId. Nothing at run time does, and the order builder it shares
+    // with create() no longer asks for one.
     const { templateId: _omitted, ...untyped } = reward;
     const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
     await send(client, { ...untyped, pdfTemplateUid: PDF_UID } as SendRewardParams);
