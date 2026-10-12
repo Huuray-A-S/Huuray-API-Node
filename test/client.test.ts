@@ -47,6 +47,13 @@ function dump(err: unknown): string {
  * helpers.ts skips that validation, and with it the way these inputs used to
  * fail: as a connection error quoting the value.
  */
+function validatingFetch(): typeof globalThis.fetch {
+  return (async (input: unknown, init?: RequestInit) => {
+    new Request(String(input), init);
+    return new Response(JSON.stringify({ OrderUID: 'x', Balances: [] }), { status: 200 });
+  }) as unknown as typeof globalThis.fetch;
+}
+
 /** A 429, with `Retry-After` when given. */
 const rateLimited = (retryAfter?: string): MockResponse => ({
   status: 429,
@@ -72,13 +79,6 @@ function retryingClient(responses: MockResponse[], retry: RetryOptions = {}) {
     },
   } as HuurayClientOptions);
   return { client, calls: rec.calls, waits };
-}
-
-function validatingFetch(): typeof globalThis.fetch {
-  return (async (input: unknown, init?: RequestInit) => {
-    new Request(String(input), init);
-    return new Response(JSON.stringify({ OrderUID: 'x', Balances: [] }), { status: 200 });
-  }) as unknown as typeof globalThis.fetch;
 }
 
 describe('construction', () => {
@@ -415,7 +415,7 @@ describe('error mapping', () => {
     ['a fraction', '1.5', null],
     ['a negative number', '-5', null],
     ['a number too large to be whole', '99999999999999999999', null],
-  ])('reads the retryAfter of a 429 with %s as %j', async (_, header, expected) => {
+  ])('reads the retryAfter of a 429 with %s', async (_, header, expected) => {
     const { client } = testClient(rateLimited(header));
     const err = await caught(() => client.balances.list());
     expect(err).toBeInstanceOf(HuurayRateLimitError);
@@ -645,6 +645,17 @@ describe('a 429 on a read', () => {
     expect(new Set(calls.map((c) => c.headers['X-API-NONCE'])).size).toBe(2);
   });
 
+  it('waits a Retry-After shorter than the backoff: it replaces it, as neither the longer of the two nor their sum', async () => {
+    noJitter();
+    // The backoff would be 5000 ms, then 10000 ms.
+    const { client, waits } = retryingClient(
+      [rateLimited('2'), rateLimited('3'), { status: 200, json: { Balances: [] } }],
+      { baseDelayMs: 5000, maxDelayMs: 10_000 },
+    );
+    await client.balances.list();
+    expect(waits).toEqual([2000, 3000]);
+  });
+
   it('honours each Retry-After in turn, up to exactly maxDelayMs', async () => {
     const { client, calls, waits } = retryingClient([
       rateLimited('2'),
@@ -687,13 +698,44 @@ describe('a 429 on a read', () => {
     expect(waits).toEqual([]);
   });
 
-  it('throws at once when the 1-second minimum is itself longer than maxDelayMs', async () => {
-    const { client, calls, waits } = retryingClient([rateLimited('0')], { maxDelayMs: 500 });
-    const err = await caught(() => client.balances.list());
-    expect(err).toBeInstanceOf(HuurayRateLimitError);
-    expect(calls).toHaveLength(1);
-    expect(waits).toEqual([]);
+  it.each([
+    ['of 4, with the default maxDelayMs of 4000', '4', {}, 4000],
+    ['of 1, with a maxDelayMs of 1000', '1', { maxDelayMs: 1000 }, 1000],
+    ['of 0, which is 1 second, with a maxDelayMs of 1000', '0', { maxDelayMs: 1000 }, 1000],
+    ['of 30, with a maxDelayMs of 30000', '30', { maxDelayMs: 30_000 }, 30_000],
+    [
+      'of 2147483, the longest a timer holds in whole seconds, with no maxDelayMs to speak of',
+      '2147483',
+      { maxDelayMs: Number.POSITIVE_INFINITY },
+      2_147_483_000,
+    ],
+  ])('waits a Retry-After %s: a wait equal to the limit is made', async (_, header, retry, ms) => {
+    const { client, calls, waits } = retryingClient(
+      [rateLimited(header), { status: 200, json: { Balances: [] } }],
+      retry,
+    );
+    await client.balances.list();
+    expect(waits).toEqual([ms]);
+    expect(calls).toHaveLength(2);
   });
+
+  it.each([
+    ['0', 500],
+    ['0', 999],
+    ['1', 999],
+    ['3', 999],
+    ['0', 0],
+    ['1', Number.NaN],
+  ])(
+    'never retries a Retry-After of %s with a maxDelayMs of %d: the wait is at least 1 second',
+    async (header, maxDelayMs) => {
+      const { client, calls, waits } = retryingClient([rateLimited(header)], { maxDelayMs });
+      const err = await caught(() => client.balances.list());
+      expect(err).toBeInstanceOf(HuurayRateLimitError);
+      expect(calls).toHaveLength(1);
+      expect(waits).toEqual([]);
+    },
+  );
 
   it('waits a longer Retry-After when maxDelayMs allows it', async () => {
     const { client, waits } = retryingClient(
@@ -727,6 +769,7 @@ describe('a 429 on a read', () => {
     await client.balances.list();
     expect(waits).toEqual([250, 500]);
     expect(calls).toHaveLength(3);
+    expect(new Set(calls.map((c) => c.headers['X-API-NONCE'])).size).toBe(3);
   });
 
   it('does not carry a Retry-After over to the wait after a later attempt', async () => {
@@ -740,15 +783,20 @@ describe('a 429 on a read', () => {
     expect(waits).toEqual([3000, 500]);
   });
 
-  it('does not read Retry-After on any other retried status', async () => {
-    noJitter();
-    const { client, waits } = retryingClient([
-      { status: 503, headers: { 'Retry-After': '3' } },
-      { status: 200, json: { Balances: [] } },
-    ]);
-    await client.balances.list();
-    expect(waits).toEqual([250]);
-  });
+  it.each([408, 425, 500, 502, 503, 504])(
+    'ignores a Retry-After on a retried %i: the wait is the backoff',
+    async (status) => {
+      noJitter();
+      const { client, calls, waits } = retryingClient([
+        { status, headers: { 'Retry-After': '3' } },
+        { status, headers: { 'Retry-After': '0' } },
+        { status: 200, json: { Balances: [] } },
+      ]);
+      await client.balances.list();
+      expect(waits).toEqual([250, 500]);
+      expect(calls).toHaveLength(3);
+    },
+  );
 
   it('throws the rate-limit error when the retries are used up', async () => {
     const { client, calls, waits } = retryingClient([

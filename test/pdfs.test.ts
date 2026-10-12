@@ -713,6 +713,22 @@ describe('pdfs.getWhenReady()', () => {
     expect(retryWaits).toEqual([]);
   });
 
+  it('does not check the wait between the retries of a poll against maxWaitMs, though its time counts', async () => {
+    const { pdfs, calls, waits, retryWaits } = pdfClient(
+      [notReady('5'), rateLimited('4'), notReady('1')],
+      { maxRetries: 2 },
+    );
+    const err = await caught(() => pdfs.getWhenReady({ orderUid: ORDER, maxWaitMs: 6_000 }));
+    // 5 s between polls, then 4 s before the retry: 9 s, past maxWaitMs, and
+    // the retry is still made.
+    expect(retryWaits).toEqual([4000]);
+    expect(calls).toHaveLength(3);
+    // Those 9 s count, so not even 1 more second is waited for the next poll.
+    expect(err).toBeInstanceOf(HuurayTimeoutError);
+    expect((err as Error).message).toMatch(/Waiting another 1 second would pass maxWaitMs\.$/);
+    expect(waits).toEqual([5000]);
+  });
+
   it.each([
     ['negative', -1],
     ['NaN', Number.NaN],
