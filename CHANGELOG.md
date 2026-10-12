@@ -142,6 +142,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with, and `DeliveryTemplateId` is not required. The order is now sent as given,
   with `DeliveryPDFTemplateUid` and without `DeliveryTemplateId`, and the API
   decides. `recipients` is still required only when `templateId` is set.
+- **A wait between retries is never longer than a timer can hold.** With
+  `retry.maxDelayMs` above 2147483647 and enough retries, the backoff passed that
+  limit, where Node waits about 1 ms and emits a `TimeoutOverflowWarning`. The
+  backoff is now capped at 2147483647 ms, as if `maxDelayMs` were that. A `NaN`
+  in `retry.baseDelayMs` or `retry.maxDelayMs`, which Node treats the same way,
+  now waits 0 ms, as `0` does.
 - **`timeoutMs` must be a whole number from 1 to 2147483647**; anything else throws
   `HuurayConfigError` at construction. That is the range Node honours: it timed a
   request out after about 1 ms for `0` and, with a `TimeoutOverflowWarning`, for

@@ -17,6 +17,7 @@ import {
   type RetryOptions,
 } from '../src/index.js';
 import { WAIT } from '../src/client.js';
+import { backoffDelay } from '../src/retry.js';
 import { recordingFetch, testClient, type MockResponse } from './helpers.js';
 
 /** The error a call throws, synchronously or as a rejection. Fails if it does not throw. */
@@ -565,6 +566,62 @@ describe('retry policy', () => {
     const { client, calls } = testClient(undefined, { retry: { maxRetries: -3 } });
     await expect(client.balances.list()).resolves.toBeDefined();
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe('the backoff between retries', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** The longest delay a timer holds. Past it, Node warns and waits about 1 ms. */
+  const TIMER_LIMIT_MS = 2_147_483_647;
+  const ok: MockResponse = { status: 200, json: { Balances: [] } };
+  const unavailable = (times: number): MockResponse[] =>
+    Array.from({ length: times }, () => ({ status: 503 }));
+
+  it('doubles from baseDelayMs up to maxDelayMs, and stays there', async () => {
+    vi.spyOn(Math, 'random').mockReturnValue(1);
+    const { client, waits } = retryingClient([...unavailable(6), ok], { maxRetries: 6 });
+    await client.balances.list();
+    expect(waits).toEqual([250, 500, 1000, 2000, 4000, 4000]);
+  });
+
+  it.each([TIMER_LIMIT_MS + 1, 1e15, Number.POSITIVE_INFINITY])(
+    'is never longer than a timer can hold, with a maxDelayMs of %d',
+    async (maxDelayMs) => {
+      vi.spyOn(Math, 'random').mockReturnValue(1);
+      const { client, waits } = retryingClient([...unavailable(40), ok], {
+        maxRetries: 40,
+        maxDelayMs,
+      });
+      await client.balances.list();
+      // 250 ms doubles to 2097152000 ms by the 24th wait; the 25th would pass the limit.
+      expect(waits.slice(0, 24)).toEqual(Array.from({ length: 24 }, (_, i) => 250 * 2 ** i));
+      expect(waits.slice(24)).toEqual(Array.from({ length: 16 }, () => TIMER_LIMIT_MS));
+
+      // A timer takes the longest of them as it is: no TimeoutOverflowWarning,
+      // after which it would fire in about 1 ms.
+      const warned = vi.spyOn(process, 'emitWarning').mockImplementation(() => {});
+      clearTimeout(setTimeout(() => {}, Math.max(...waits)));
+      expect(warned).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['baseDelayMs is NaN', { baseDelayMs: Number.NaN }],
+    ['maxDelayMs is NaN', { maxDelayMs: Number.NaN }],
+    ['both are NaN', { baseDelayMs: Number.NaN, maxDelayMs: Number.NaN }],
+  ])('waits 0 ms, never NaN, when %s', async (_, retry) => {
+    const { client, calls, waits } = retryingClient([...unavailable(2), ok], retry);
+    await client.balances.list();
+    expect(waits).toEqual([0, 0]);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('waits 0 ms, never NaN, with a baseDelayMs of 0, however often it has doubled', () => {
+    // 2 ** 1024 is Infinity, and 0 * Infinity is NaN.
+    expect(backoffDelay(1024, { maxRetries: 1025, baseDelayMs: 0, maxDelayMs: 4000 })).toBe(0);
   });
 });
 
