@@ -211,41 +211,68 @@ describe('PDF delivery templates', () => {
     expect(calls[0]?.body).not.toHaveProperty('DeliveryPDFTemplateUid');
   });
 
-  it('create() rejects pdfTemplateUid without templateId before any HTTP request', async () => {
-    const { client, calls } = testClient();
-    await expect(client.orders.create({ ...base, pdfTemplateUid: PDF_UID })).rejects.toThrow(
-      /templateId is required when pdfTemplateUid is set/,
-    );
-    expect(calls).toHaveLength(0);
-  });
+  it.each(['create', 'createSync'] as const)(
+    '%s() sends pdfTemplateUid without a templateId as is',
+    async (method) => {
+      // The spec: for a physical product (delivered by post only) it is the
+      // template the gift cards are printed with, and DeliveryTemplateId is not
+      // required.
+      const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x', Vouchers: [] } });
+      await client.orders[method]({ ...base, pdfTemplateUid: PDF_UID });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.body).toMatchObject({ DeliveryPDFTemplateUid: PDF_UID });
+      expect(calls[0]?.body).not.toHaveProperty('DeliveryTemplateId');
+      expect(calls[0]?.body).not.toHaveProperty('Recipients');
+    },
+  );
 
-  it('createSync() rejects pdfTemplateUid without templateId before any HTTP request', async () => {
-    const { client, calls } = testClient();
-    await expect(
-      client.orders.createSync({
+  it.each(['create', 'createSync'] as const)(
+    '%s() sends recipients with it too, still without a templateId',
+    async (method) => {
+      const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x', Vouchers: [] } });
+      await client.orders[method]({
         ...base,
-        recipients: [{ email: 'a@example.com' }],
+        recipients: [{ name: 'A', email: 'a@example.com' }],
         pdfTemplateUid: PDF_UID,
-      }),
-    ).rejects.toThrow(/templateId is required when pdfTemplateUid is set/);
-    expect(calls).toHaveLength(0);
+      });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.body).toMatchObject({
+        DeliveryPDFTemplateUid: PDF_UID,
+        Recipients: [{ Name: 'A', Email: 'a@example.com' }],
+      });
+      expect(calls[0]?.body).not.toHaveProperty('DeliveryTemplateId');
+    },
+  );
+
+  it.each([
+    ['orders.sendReward()', (c: HuurayClient, p: SendRewardParams) => c.orders.sendReward(p)],
+    ['client.sendReward()', (c: HuurayClient, p: SendRewardParams) => c.sendReward(p)],
+  ])('%s sends it as is when an untyped caller gives no templateId', async (_, send) => {
+    // The type requires templateId; nothing at run time does.
+    const { templateId: _omitted, ...untyped } = reward;
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
+    await send(client, { ...untyped, pdfTemplateUid: PDF_UID } as SendRewardParams);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toMatchObject({ DeliveryPDFTemplateUid: PDF_UID });
+    expect(calls[0]?.body).not.toHaveProperty('DeliveryTemplateId');
   });
 
-  it('treats templateId: null as not supplied and rejects before any HTTP request', async () => {
-    // Untyped JS callers can pass null; the spec calls a null DeliveryTemplateId
-    // paired with a DeliveryPDFTemplateUid invalid, so it must never be sent.
-    const { client, calls } = testClient();
-    await expect(
-      client.orders.create({
-        ...base,
-        templateId: null as unknown as number,
-        pdfTemplateUid: PDF_UID,
-      }),
-    ).rejects.toThrow(/templateId is required when pdfTemplateUid is set/);
-    expect(calls).toHaveLength(0);
+  it('sends pdfTemplateUid with templateId: null as is, as DeliveryTemplateId: null', async () => {
+    // Untyped JS callers can pass null, which the spec reads as no delivery.
+    const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
+    await client.orders.create({
+      ...base,
+      templateId: null as unknown as number,
+      pdfTemplateUid: PDF_UID,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.body).toMatchObject({
+      DeliveryTemplateId: null,
+      DeliveryPDFTemplateUid: PDF_UID,
+    });
   });
 
-  it('treats pdfTemplateUid: null as not supplied, so it needs no templateId', async () => {
+  it('accepts pdfTemplateUid: null without a templateId', async () => {
     const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
     await expect(
       client.orders.create({ ...base, pdfTemplateUid: null as unknown as string }),
@@ -253,7 +280,7 @@ describe('PDF delivery templates', () => {
     expect(calls).toHaveLength(1);
   });
 
-  it('checks only that templateId is present, not what kind of template it is', async () => {
+  it('does not check what kind of template templateId is', async () => {
     // Whether templateId is an email template is the API's call; the client cannot know.
     const { client, calls } = testClient({ status: 200, json: { OrderUID: 'x' } });
     await expect(

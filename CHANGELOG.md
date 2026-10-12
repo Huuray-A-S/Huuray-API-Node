@@ -110,6 +110,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`pdfTemplateUid` without `templateId` is no longer rejected.**
+  `orders.create()`, `orders.createSync()` and `sendReward()` threw a `TypeError`
+  before sending, which blocked valid orders. The specification says: for email
+  delivery the PDF template is attached to the emails sent by
+  `DeliveryTemplateId`, which must then be an email template; for a physical
+  product (delivered by post only) it is the template the gift cards are printed
+  with, and `DeliveryTemplateId` is not required. The order is now sent as given,
+  with `DeliveryPDFTemplateUid` and without `DeliveryTemplateId`, and the API
+  decides. `recipients` is still required only when `templateId` is set.
 - **`timeoutMs` must be a whole number from 1 to 2147483647**; anything else throws
   `HuurayConfigError` at construction. That is the range Node honours: it timed a
   request out after about 1 ms for `0` and, with a `TimeoutOverflowWarning`, for
@@ -166,9 +175,9 @@ First release. Complete coverage of the Huuray API v4.
   as `pdfTemplates` (type `PdfTemplate`: `uid`, `name`, `type`, `language`,
   `country`, `brandName`) instead of silently dropping them, and
   `orders.create()`, `orders.createSync()` and `sendReward()` accept an optional
-  `pdfTemplateUid`, sent as `DeliveryPDFTemplateUid`. It is rejected before any
-  request unless `templateId` is also set; the API requires that to be an email
-  template.
+  `pdfTemplateUid`, sent as `DeliveryPDFTemplateUid`. For email delivery the API
+  requires `templateId` to be an email template; for a physical product
+  delivered by post no `templateId` is required.
 - `request()` — an escape hatch that signs any call.
 - Read-only CLI: `balance`, `catalogue`, `templates`, `stock`, `rates`, `search`.
 - The CLI `templates` command lists PDF templates as well as delivery templates,

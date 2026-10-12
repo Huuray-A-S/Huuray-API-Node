@@ -17,9 +17,16 @@ export interface Template {
   plainText: string | null;
 }
 
-/** A PDF template — a document attached to the emails a delivery template sends. */
+/**
+ * A PDF template: a document attached to the emails a delivery template sends,
+ * or the template a physical product's gift cards are printed with.
+ */
 export interface PdfTemplate {
-  /** Pass this as `pdfTemplateUid` when ordering, alongside an email `templateId`. */
+  /**
+   * Pass this as `pdfTemplateUid` when ordering: alongside an email
+   * `templateId` for email delivery, or without one for a physical product
+   * delivered by post.
+   */
   uid: string | null;
   name: string | null;
   /** PDF template type, as named by the API. */

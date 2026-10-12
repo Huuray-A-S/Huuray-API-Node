@@ -138,9 +138,12 @@ interface OrderParamsBase extends PurchaseOrderFields {
   /** Delivery template id from `templates.list()`. Omit for no delivery. */
   templateId?: number;
   /**
-   * PDF template uid from `templates.list()` (`pdfTemplates`), attached as a
-   * document to the emails sent by `templateId`. Requires `templateId`, which
-   * the API requires to be an email template.
+   * PDF template uid from `templates.list()` (`pdfTemplates`). For email
+   * delivery it is attached as a document to the emails sent by `templateId`,
+   * which must then be an email template. For a physical product (delivered by
+   * post only) it is the template the gift cards are printed with, and
+   * `templateId` is not required. This client sends it with or without a
+   * `templateId`; the API decides.
    * The PDF template must also be available for the ordered product's brand
    * and country (`brandName` / `country` on the PDF template, where null means
    * any); otherwise the API rejects the order with a 422, raised as
@@ -181,9 +184,10 @@ export interface SendRewardParams extends PurchaseOrderFields {
   /** Delivery template id from `templates.list()`. */
   templateId: number;
   /**
-   * PDF template uid from `templates.list()` (`pdfTemplates`), attached as a
-   * document to the email. The API requires `templateId` to be an email
-   * template when this is set.
+   * PDF template uid from `templates.list()` (`pdfTemplates`). For email
+   * delivery it is attached as a document to the email, and `templateId` must
+   * then be an email template. For a physical product (delivered by post
+   * only) it is the template the gift card is printed with.
    * The PDF template must also be available for the ordered product's brand
    * and country (`brandName` / `country` on the PDF template, where null means
    * any); otherwise the API rejects the order with a 422, raised as
@@ -439,15 +443,10 @@ export class OrdersResource extends Resource {
     if (!Number.isInteger(params.quantity) || params.quantity < 1) {
       throw new TypeError(`quantity must be a positive integer, received ${params.quantity}.`);
     }
-    // Loose equality on purpose: untyped callers can pass null, and null must not
-    // slip through as "templateId supplied" or "pdfTemplateUid supplied".
-    if (params.pdfTemplateUid != null && params.templateId == null) {
-      throw new TypeError(
-        'templateId is required when pdfTemplateUid is set — the API attaches the PDF template ' +
-          'to the emails sent by the delivery template, which must be an email template.',
-      );
-    }
-    // Loose again: the spec requires Recipients "unless DeliveryTemplateId is null".
+    // pdfTemplateUid is not checked against templateId: the spec allows it
+    // without one, for a physical product delivered by post.
+    // Loose equality on purpose: untyped callers can pass null, and the spec
+    // requires Recipients "unless DeliveryTemplateId is null".
     if (params.templateId != null) {
       const n = params.recipients?.length ?? 0;
       if (n === 0) {
