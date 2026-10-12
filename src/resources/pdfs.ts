@@ -27,8 +27,9 @@ export interface GetPdfParams {
   /** One voucher of the order, a voucher `id`. Omit for every voucher on the order. */
   voucherId?: number;
   /**
-   * A PDF template uid from `templates.list()` (`pdfTemplates`). Omit for the
-   * PDF template the order's delivery email was sent with.
+   * The uid of a Downloadable PDF template from `templates.list()`
+   * (`pdfTemplates`). Omit for the PDF template the order's delivery email was
+   * sent with.
    */
   pdfTemplateUid?: string;
   /** `true` for one PDF holding every selected voucher, instead of one per voucher. */
@@ -140,7 +141,7 @@ export class PdfsResource extends Resource {
    * supplier has not delivered a code yet, and is returned with `ready: false`
    * and no documents, not thrown. {@link getWhenReady} asks again until it is
    * ready. The token needs the Search permission, and the API supports only
-   * orders with at most 3 receivers (a `422` otherwise).
+   * orders with at most 10 receivers (a `422` otherwise).
    *
    * A read, despite being a POST: it never changes the order, and is retried
    * on connection failures, 5xx and `429` like the other reads.

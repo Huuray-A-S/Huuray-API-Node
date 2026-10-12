@@ -145,7 +145,7 @@ The token is consumed by the order it is used with. **Uploads are never retried 
 
 ## Fetching a gift card PDF
 
-`pdfs.get()` returns the gift card PDFs of an order you placed: one per voucher, only the one for `voucherId`, or a single combined PDF with `combine: true`. Without `pdfTemplateUid` you get the PDF the order's delivery email was sent with.
+`pdfs.get()` returns the gift card PDFs of an order you placed: one per voucher, only the one for `voucherId`, or a single combined PDF with `combine: true`. Without `pdfTemplateUid` you get the PDF the order's delivery email was sent with. With it, any Downloadable PDF template from `templates.list()` can be used, as long as it is available for the ordered product's brand and country.
 
 ```ts
 const huuray = new HuurayClient({ apiToken, apiSecret, timeoutMs: 100_000 });   // PDFs can be large
@@ -159,7 +159,7 @@ for (const doc of pdf.documents) {
 
 A `202` means the order is still being processed, or a supplier has not delivered a code yet. `get()` returns it as `ready: false`, with no documents and `retryAfter` in seconds — never as success. `getWhenReady()` waits `retryAfter` (30 seconds when the API sends none, and at least 1 second) and asks again, up to `maxWaitMs` (default 10 minutes), then throws `HuurayTimeoutError` with the API's last status message. Any `2xx` other than `200` is treated like a `202` (not ready); any non-`2xx` ends the wait with an exception.
 
-**The PDF is a bearer instrument:** it holds the redeemable code, so whoever has the file can use the gift card. Never log it, and keep it no longer than you need it; `console.log()` and `JSON.stringify()` print it as `[N bytes]`, and `redact()` removes it. The API token needs the **Search** permission, and the API serves PDFs only for orders with at most 3 receivers — a larger order gets a 422, which this client leaves to the API. A PDF can be several MB, so allow a longer `timeoutMs` than the default: Huuray suggests 100 seconds.
+**The PDF is a bearer instrument:** it holds the redeemable code, so whoever has the file can use the gift card. Never log it, and keep it no longer than you need it; `console.log()` and `JSON.stringify()` print it as `[N bytes]`, and `redact()` removes it. The API token needs the **Search** permission, and the API serves PDFs only for orders with at most 10 receivers — a larger order gets a 422, which this client leaves to the API. A PDF can be several MB, so allow a longer `timeoutMs` than the default: Huuray suggests 100 seconds.
 
 ## Seven things worth knowing
 

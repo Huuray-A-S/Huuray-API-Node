@@ -9,9 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Gift card PDFs — built against a predicted specification.** `POST /v4/Pdf` is
-  not deployed yet; `openapi/huuray-v4.json` is derived from the unreleased API
-  branch and must be replaced by the published specification before release.
 - **`pdfs.get({ orderUid, voucherId, pdfTemplateUid, combine })`** — `POST /v4/Pdf`.
   Returns a `PdfResult`: `ready`, `orderUid`, `documents` and `retryAfter`. Each
   `PdfDocument` has `voucherIds`, `pdfTemplateUid`, `fileName`, `contentType` and
@@ -19,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ready: false` with no documents, and `retryAfter` is the `Retry-After` header in
   whole seconds, or `null`. The optional fields are omitted when not given or
   `null`; the client checks none of them, the API does. A read: retried on
-  connection failures and 5xx like the others, never
-  `HuurayIndeterminateOrderError`.
+  connection failures, 5xx and 429 like the others, never
+  `HuurayIndeterminateOrderError`. The API serves PDFs only for orders with at
+  most 10 receivers, and `pdfTemplateUid` is a Downloadable PDF template.
 - **`pdfs.getWhenReady({ …, maxWaitMs })`** asks again while the API answers
   `202`, waiting `retryAfter` seconds (30 when there is none, and at least 1), each
   time as a new signed request. When the next wait would pass `maxWaitMs` (default
@@ -42,10 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The conformance gates cover `POST /v4/Pdf`**, with every `PdfRequest` field
   populated; the operation count goes from 10 to 11. The test fetch can answer with
   response headers.
-- **Purchase order files and references on orders — built against a predicted
-  specification.** The API change is not deployed yet; `openapi/huuray-v4.json`
-  is derived from the unreleased API branch and must be replaced by the published
-  specification before release.
 - **`uploads.create({ file, fileName, contentType })`** — `POST /v4/Upload`, sent
   as `multipart/form-data` with one part named `File`. `file` is a `Uint8Array`
   (or `Buffer`), `ArrayBuffer` or `Blob`; without `contentType` the part is sent
@@ -87,6 +81,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of a request ends the wait with `HuurayRateLimitError`. The conformance gates
   check that every operation documents a 429 with a `Retry-After` in whole
   seconds.
+
+### Changed
+
+- **`openapi/huuray-v4.json` is the v4 specification Huuray published on
+  9 October 2026.** `POST /v4/Pdf`, `POST /v4/Upload` and the purchase order
+  fields on orders are in it as this client sends them. Against the copy vendored
+  before, every operation documents a `429` response with a `Retry-After` header,
+  `DeliveryPDFTemplateUid` no longer requires a `DeliveryTemplateId` for a
+  physical product, and `POST /v4/Pdf` serves orders with at most 10 receivers
+  (was 3) and names its `PDFTemplateUid` a Downloadable PDF template.
 
 ### Security
 

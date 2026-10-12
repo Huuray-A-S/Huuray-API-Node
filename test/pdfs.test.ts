@@ -458,7 +458,7 @@ describe('pdfs.get() errors use the ordinary mapping', () => {
       422,
       HuurayValidationError,
       'Order has too many receivers',
-      'The PDF can only be fetched for orders with at most 3 receivers',
+      'The PDF can only be fetched for orders with at most 10 receivers',
     ],
     [400, HuurayApiError, 'Invalid request', 'OrderUID is required'],
     [401, HuurayAuthError, 'Restricted Access', 'Restricted Access'],
